@@ -220,8 +220,12 @@
         waiting.clear();
         if (!speedApplied) {
             // The simulator says that it plays Ogg, then fails to decode
-            // it. MZ has its own decoder for a browser without Ogg.
-            if (settings.simulator && typeof Utils !== "undefined") Utils.canPlayOgg = () => false;
+            // it. Without Ogg, MV loads the .m4a copy of each sound, and
+            // MZ uses its own decoder.
+            if (settings.simulator) {
+                if (typeof WebAudio !== "undefined") WebAudio.canPlayOgg = () => false;
+                if (typeof Utils !== "undefined") Utils.canPlayOgg = () => false;
+            }
             applySpeed();
         }
         for (const callback of callbacks) callback(time);
