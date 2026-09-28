@@ -1,0 +1,69 @@
+# Builds the core for the device and the simulator, and publishes
+# mvmz-ios.tar.gz when a tag v* is pushed. A run from the Actions tab
+# builds the same file and keeps it as a workflow artifact.
+#
+# The release notes give the sha256, which a host pins next to the tag.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Check for launcher code
+        run: scripts/check-no-host-code.sh
+
+      - name: Build
+        run: |
+          make SDK=iphoneos
+          make SDK=iphonesimulator
+
+      - name: Package
+        id: package
+        run: |
+          set -eu
+          mkdir -p pkg/include pkg/iphoneos pkg/iphonesimulator
+          cp src/mvmz_core.h pkg/include/
+          cp out/iphoneos/libmvmz.a pkg/iphoneos/
+          cp out/iphonesimulator/libmvmz.a pkg/iphonesimulator/
+          {
+            echo "tag=$GITHUB_REF_NAME"
+            echo "commit=$GITHUB_SHA"
+          } > pkg/MANIFEST
+          tar -czf mvmz-ios.tar.gz -C pkg MANIFEST include iphoneos iphonesimulator
+          SHA256="$(shasum -a 256 mvmz-ios.tar.gz | awk '{print $1}')"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "mvmz-ios.tar.gz sha256: $SHA256"
+
+      - name: Publish the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          printf 'Built from `%s`.\n\nsha256: `%s`\n' "$GITHUB_SHA" "$SHA256" > notes.md
+          gh release create "$GITHUB_REF_NAME" mvmz-ios.tar.gz --title "$GITHUB_REF_NAME" --notes-file notes.md
+
+      - name: Keep the build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvmz-ios
+          path: mvmz-ios.tar.gz
