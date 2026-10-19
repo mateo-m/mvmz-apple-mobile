@@ -32,4 +32,8 @@ The results go to `out/`.
 
 ## License
 
-GPL-2.0. See `LICENSE`.
+Copyright (C) 2026 Mateo M.
+
+The code that Mateo M. wrote is under the [GPLv3](LICENSE), with [additional terms](ADDITIONAL-TERMS.md) that GPLv3 section 7 permits. Each of these files says so in its header. Code from other projects keeps its own license.
+
+If you ship this core in an app, keep the text "mvmz-apple-mobile, Copyright (C) 2026 Mateo M., https://github.com/mateo-m/mvmz-apple-mobile" on the licenses or credits screen of the app, and do not say that you wrote this code. Versions before this change are under GPL-2.0.
