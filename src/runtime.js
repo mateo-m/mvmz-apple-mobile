@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Runs in the game page before the game's own scripts.
 //
 // RPG Maker MV and MZ games ship for NW.js, a desktop browser with
