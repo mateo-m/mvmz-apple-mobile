@@ -8,12 +8,15 @@ Each release has `mvmz-ios.tar.gz`:
 
 ```
 MANIFEST
+licenses.json
 include/mvmz_core.h
 iphoneos/libmvmz.a
 iphonesimulator/libmvmz.a
 ```
 
 `src/mvmz_core.h` is the whole interface. Link the frameworks WebKit, UIKit, Metal and UniformTypeIdentifiers next to the library.
+
+`licenses.json` holds the license notice of the core, as `name`, `license` and `text`. Show it in the app.
 
 `mvmz_start` returns the web view of the game. Put it in a visible window and set its frame. WebKit holds the page of a web view that is in no visible window.
 

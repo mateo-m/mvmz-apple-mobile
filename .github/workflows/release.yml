@@ -41,13 +41,14 @@ jobs:
           set -eu
           mkdir -p pkg/include pkg/iphoneos pkg/iphonesimulator
           cp src/mvmz_core.h pkg/include/
+          cp licenses.json pkg/
           cp out/iphoneos/libmvmz.a pkg/iphoneos/
           cp out/iphonesimulator/libmvmz.a pkg/iphonesimulator/
           {
             echo "tag=$GITHUB_REF_NAME"
             echo "commit=$GITHUB_SHA"
           } > pkg/MANIFEST
-          tar -czf mvmz-ios.tar.gz -C pkg MANIFEST include iphoneos iphonesimulator
+          tar -czf mvmz-ios.tar.gz -C pkg MANIFEST licenses.json include iphoneos iphonesimulator
           SHA256="$(shasum -a 256 mvmz-ios.tar.gz | awk '{print $1}')"
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "mvmz-ios.tar.gz sha256: $SHA256"
