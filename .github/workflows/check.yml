@@ -24,3 +24,4 @@ jobs:
       - run: |
           make SDK=iphoneos
           make SDK=iphonesimulator
+          make SDK=macosx
