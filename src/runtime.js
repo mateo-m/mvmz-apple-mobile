@@ -320,15 +320,18 @@
         pause() {
             paused = true;
             const context = audioContext();
-            if (context && context.state === "running") context.suspend();
+            // RPG Maker MZ stops the game on any unhandled rejection. WebKit
+            // rejects a pending suspend() or play() with AbortError when a
+            // resume() or pause() comes before it ends.
+            if (context && context.state === "running") context.suspend().catch(() => {});
             playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
             playingMedia.forEach((m) => m.pause());
         },
         resume() {
             paused = false;
             const context = audioContext();
-            if (context && context.state === "suspended") context.resume();
-            playingMedia.forEach((m) => m.play());
+            if (context && context.state === "suspended") context.resume().catch(() => {});
+            playingMedia.forEach((m) => m.play().catch(() => {}));
             playingMedia = [];
             // MV counts the time since its last update, and would run
             // up to 15 updates at once to catch up with the pause.
