@@ -3,7 +3,12 @@
 
 #import <CommonCrypto/CommonDigest.h>
 #import <Metal/Metal.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_OSX
+#import <AppKit/AppKit.h>
+#else
 #import <UIKit/UIKit.h>
+#endif
 #import <WebKit/WebKit.h>
 
 #include "mvmz_core.h"
@@ -157,7 +162,9 @@ void *mvmz_start(const char *gameDir, const char *gameId) {
     // The game starts its music before the first touch, as it does on a
     // desktop.
     config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
+#if !TARGET_OS_OSX
     config.allowsInlineMediaPlayback = YES;
+#endif
 
     NSDictionary *settings = @{
         @"speed" : @(gSpeed),
@@ -180,11 +187,15 @@ void *mvmz_start(const char *gameDir, const char *gameId) {
         @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
     gWebView.navigationDelegate = gMessages;
     gWebView.UIDelegate = gMessages;
+#if TARGET_OS_OSX
+    gWebView.underPageBackgroundColor = NSColor.blackColor;
+#else
     gWebView.opaque = NO;
     gWebView.backgroundColor = UIColor.blackColor;
     gWebView.scrollView.scrollEnabled = NO;
     gWebView.scrollView.bounces = NO;
     gWebView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+#endif
 
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@://%@/index.html", MvmzFileServer.scheme,
                                                                   originHost(gameId ?: "")]];

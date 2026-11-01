@@ -2,6 +2,7 @@
 #
 #   make SDK=iphonesimulator
 #   make SDK=iphoneos
+#   make SDK=macosx
 
 SDK ?= iphonesimulator
 ARCH := arm64
@@ -11,8 +12,10 @@ ifeq ($(SDK),iphonesimulator)
 TARGET := $(ARCH)-apple-ios$(MINIMUM_REQUIRED)-simulator
 else ifeq ($(SDK),iphoneos)
 TARGET := $(ARCH)-apple-ios$(MINIMUM_REQUIRED)
+else ifeq ($(SDK),macosx)
+TARGET := $(ARCH)-apple-macos$(MINIMUM_REQUIRED)
 else
-$(error SDK must be iphoneos or iphonesimulator)
+$(error SDK must be iphoneos, iphonesimulator or macosx)
 endif
 
 CC := $(shell xcrun --sdk $(SDK) -f clang)

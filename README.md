@@ -1,6 +1,6 @@
 # mvmz-apple-mobile
 
-Runs a released RPG Maker MV or MZ game on iOS. An MV or MZ game is a web page that carries its own engine as JavaScript. The core shows the game's `index.html` in a `WKWebView`, and makes the page look like NW.js, the desktop runtime that the game shipped for. The game keeps its saves as files in its own folder, as it does on a desktop.
+Runs a released RPG Maker MV or MZ game on iOS and macOS. An MV or MZ game is a web page that carries its own engine as JavaScript. The core shows the game's `index.html` in a `WKWebView`, and makes the page look like NW.js, the desktop runtime that the game shipped for. The game keeps its saves as files in its own folder, as it does on a desktop.
 
 ## Use a release
 
@@ -14,7 +14,7 @@ iphoneos/libmvmz.a
 iphonesimulator/libmvmz.a
 ```
 
-`src/mvmz_core.h` is the whole interface. Link the frameworks WebKit, UIKit, Metal and UniformTypeIdentifiers next to the library.
+`src/mvmz_core.h` is the whole interface. Link the frameworks WebKit, UIKit (AppKit on macOS), Metal and UniformTypeIdentifiers next to the library.
 
 `licenses.json` holds the license notice of the core, as `name`, `license` and `text`. Show it in the app.
 
@@ -22,11 +22,12 @@ iphonesimulator/libmvmz.a
 
 ## Build
 
-You need Xcode with the iOS 26 SDK.
+You need Xcode with the iOS 26 and macOS 26 SDKs.
 
 ```sh
 make SDK=iphonesimulator
 make SDK=iphoneos
+make SDK=macosx
 ```
 
 The results go to `out/`.
