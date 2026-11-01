@@ -12,6 +12,7 @@ licenses.json
 include/mvmz_core.h
 iphoneos/libmvmz.a
 iphonesimulator/libmvmz.a
+macosx/libmvmz.a
 ```
 
 `src/mvmz_core.h` is the whole interface. Link the frameworks WebKit, UIKit (AppKit on macOS), Metal and UniformTypeIdentifiers next to the library.

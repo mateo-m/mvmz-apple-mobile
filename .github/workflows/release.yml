@@ -1,4 +1,4 @@
-# Builds the core for the device and the simulator, and publishes
+# Builds the core for the device, the simulator and the Mac, and publishes
 # mvmz-ios.tar.gz when a tag v* is pushed. A run from the Actions tab
 # builds the same file and keeps it as a workflow artifact.
 #
@@ -34,21 +34,23 @@ jobs:
         run: |
           make SDK=iphoneos
           make SDK=iphonesimulator
+          make SDK=macosx
 
       - name: Package
         id: package
         run: |
           set -eu
-          mkdir -p pkg/include pkg/iphoneos pkg/iphonesimulator
+          mkdir -p pkg/include pkg/iphoneos pkg/iphonesimulator pkg/macosx
           cp src/mvmz_core.h pkg/include/
           cp licenses.json pkg/
           cp out/iphoneos/libmvmz.a pkg/iphoneos/
           cp out/iphonesimulator/libmvmz.a pkg/iphonesimulator/
+          cp out/macosx/libmvmz.a pkg/macosx/
           {
             echo "tag=$GITHUB_REF_NAME"
             echo "commit=$GITHUB_SHA"
           } > pkg/MANIFEST
-          tar -czf mvmz-ios.tar.gz -C pkg MANIFEST licenses.json include iphoneos iphonesimulator
+          tar -czf mvmz-ios.tar.gz -C pkg MANIFEST licenses.json include iphoneos iphonesimulator macosx
           SHA256="$(shasum -a 256 mvmz-ios.tar.gz | awk '{print $1}')"
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "mvmz-ios.tar.gz sha256: $SHA256"
