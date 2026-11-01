@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-// MV/MZ core: runs a released RPG Maker MV or MZ game on iOS.
+// MV/MZ core: runs a released RPG Maker MV or MZ game on iOS and macOS.
 //
 // An MV or MZ game is a web page that carries its own engine as
 // JavaScript. The core shows the game's index.html in a WKWebView,
@@ -9,7 +9,7 @@
 // NW.js, the desktop runtime that the game shipped for. The saves go to
 // the game folder, as they do on a desktop.
 //
-// libmvmz.a defines the names below. Link WebKit, UIKit, Metal and
+// libmvmz.a defines the names below. Link WebKit, UIKit (AppKit on macOS), Metal and
 // UniformTypeIdentifiers next to it.
 //
 // Call every function on the main thread. The core calls each callback
