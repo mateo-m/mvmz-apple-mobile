@@ -33,7 +33,7 @@ $(OUT)/libmvmz.a: $(OBJECTS)
 	rm -f $@
 	$(AR) rcs $@ $^
 
-$(OUT)/obj/%.o: src/%.m src/mvmz_core.h src/MvmzFileServer.h src/runtime.js
+$(OUT)/obj/%.o: src/%.m src/mvmz_core.h src/MvmzFileServer.h src/runtime.js Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
