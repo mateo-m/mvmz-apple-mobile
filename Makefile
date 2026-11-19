@@ -6,13 +6,15 @@
 
 SDK ?= iphonesimulator
 ARCH := arm64
-MINIMUM_REQUIRED := 26.0
 
 ifeq ($(SDK),iphonesimulator)
+MINIMUM_REQUIRED := 17.0
 TARGET := $(ARCH)-apple-ios$(MINIMUM_REQUIRED)-simulator
 else ifeq ($(SDK),iphoneos)
+MINIMUM_REQUIRED := 17.0
 TARGET := $(ARCH)-apple-ios$(MINIMUM_REQUIRED)
 else ifeq ($(SDK),macosx)
+MINIMUM_REQUIRED := 14.0
 TARGET := $(ARCH)-apple-macos$(MINIMUM_REQUIRED)
 else
 $(error SDK must be iphoneos, iphonesimulator or macosx)
@@ -31,7 +33,7 @@ $(OUT)/libmvmz.a: $(OBJECTS)
 	rm -f $@
 	$(AR) rcs $@ $^
 
-$(OUT)/obj/%.o: src/%.m src/mvmz_core.h src/MvmzFileServer.h src/runtime.js
+$(OUT)/obj/%.o: src/%.m src/mvmz_core.h src/MvmzFileServer.h src/runtime.js Makefile
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
