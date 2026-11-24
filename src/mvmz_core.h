@@ -54,12 +54,13 @@ void mvmz_inject_key(int usage, int pressed);
 // when the page stopped, so a snapshot of the web view then shows the
 // frame the game stopped on. done can be null.
 //
-// The pause also keeps the game state in memory when the game is on its
-// map or in a menu over it. When iOS stops the web content process, for
-// example in the background, the core loads the page again from that
-// state, at the next mvmz_resume when the game is paused. If the state
-// does not load, the game starts at its title screen. The saves of the
-// player stay as they are.
+// The pause also keeps the game state in memory when the game could save:
+// on its map or in a menu over it, with no event, message, or scene change
+// in progress. When iOS stops the web content process, for example in the
+// background, the core loads the page again from that state, at the next
+// mvmz_resume when the game is paused. With no such state, the exit
+// callback runs. If the state does not load, the game starts at its title
+// screen. The saves of the player stay as they are.
 void mvmz_pause(void (*done)(void *userdata), void *userdata);
 
 // Starts the frames, the sound and the video again.
