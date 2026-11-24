@@ -81,8 +81,8 @@ static void setRuntime(WKUserContentController *controller, NSString *resumePoin
     [controller addUserScript:script];
 }
 
-// The resume point is used once, so a game that stops again goes back
-// only to a resume point of a later pause.
+// Each point gives one reload, so a page that stops again during its
+// load, with no pause, ends the game.
 static void reloadFromResumePoint(void) {
     logLine(@"the game starts again from its resume point");
     setRuntime(gWebView.configuration.userContentController, gResumePoint);
@@ -108,8 +108,12 @@ __attribute__((visibility("hidden")))
     if ([type isEqualToString:@"frame"]) {
         // The page posts a frame after each load and each resume. The game
         // then runs past its resume point, so a stop from now on, or a
-        // reload by the game itself, must not go back to it.
-        if (!gPaused) {
+        // reload by the game itself, must not go back to it. A frame while
+        // paused comes from a page that loaded after the pause failed on it.
+        // That page is still at the point.
+        if (gPaused) {
+            runJS(@"__mvmz.pause()");
+        } else {
             gResumePoint = nil;
         }
         if (gLoadingResumePoint) {

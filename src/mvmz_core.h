@@ -60,7 +60,8 @@ void mvmz_inject_key(int usage, int pressed);
 // background, the core loads the page again from that state, at the next
 // mvmz_resume when the game is paused. With no such state, the exit
 // callback runs. If the state does not load, the game starts at its title
-// screen. The saves of the player stay as they are.
+// screen. If the page does not load, the exit callback runs. The saves of
+// the player stay as they are.
 void mvmz_pause(void (*done)(void *userdata), void *userdata);
 
 // Starts the frames, the sound and the video again.
@@ -73,13 +74,13 @@ void mvmz_resume(void);
 void mvmz_set_speed(int multiplier);
 
 // Smooth (1) or sharp (0) scaling of the picture. Sharp by default. The
-// next load of the page reads it.
+// next mvmz_start reads it.
 void mvmz_set_smooth(int smooth);
 
 // MARK: - What the game reports
 
-// Called on the first frame after mvmz_start and after each
-// mvmz_resume.
+// Called on the first frame after mvmz_start, after each mvmz_resume,
+// and after a reload from a resume point (see mvmz_pause).
 void mvmz_set_frame_callback(void (*callback)(void *userdata), void *userdata);
 
 // Called with the resolution of the game when it boots, and each time
