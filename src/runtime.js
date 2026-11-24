@@ -194,6 +194,7 @@
     let scheduled = false;
     let paused = false;
     let reportFrame = true;
+    let frameShown = false;
     let frames = 0;
     let speed = settings.speed;
     let speedApplied = false;
@@ -235,6 +236,7 @@
         frames++;
         if (reportFrame) {
             reportFrame = false;
+            frameShown = true;
             post({ type: "frame" });
         }
         // A game or a plugin can change the resolution from any script,
@@ -364,15 +366,15 @@
     // MV stops at an error in main.js before it sets window.onload. The
     // main.js of MZ defines Main and starts from its own load listener.
     // MV and MZ print their other boot errors into an error printer, and
-    // then never ask for a frame.
+    // then show no frame.
     let bootReported = false;
     const reportBootError = (message) => {
-        if (bootReported || nextId !== 1 || !message) return;
+        if (bootReported || frameShown || !message) return;
         bootReported = true;
         post({ type: "bootError", message: message.replace(/\s*\n\s*/g, ": ") });
     };
     new MutationObserver((records, observer) => {
-        if (nextId !== 1) return observer.disconnect();
+        if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
     window.addEventListener("load", () => setTimeout(() => {
