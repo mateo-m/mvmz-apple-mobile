@@ -355,41 +355,35 @@
         const original = console[level].bind(console);
         console[level] = (...args) => {
             original(...args);
-            post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}` });
+            post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    let lastError = null;
+    // An error in the top level of main.js stops the start of the game.
+    // MV sets window.onload at the end of main.js, and MZ adds its load
+    // listener at the end of main.run(). The filename of the error is the
+    // script that threw, which can be a script that main.js called.
+    let mainError = null;
     window.addEventListener("error", (e) => {
-        if (e.filename.endsWith("/js/main.js")) lastError = e.message;
-        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` });
+        const script = document.currentScript?.src;
+        if (script && new URL(script).pathname.endsWith("/js/main.js")) mainError = e.message;
+        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
-    // MV stops at an error in main.js before it sets window.onload. The
-    // main.js of MZ defines Main and starts from its own load listener.
     // MV and MZ print their other boot errors into an error printer.
     let bootReported = false;
     const reportBootError = (message) => {
         if (bootReported || frameShown || !message) return;
         bootReported = true;
-        post({ type: "bootError", message: message.replace(/\s*\n\s*/g, ": ") });
+        post({ type: "bootError", message: message.replace(/\s*\n\s*/g, ": ").toWellFormed() });
     };
     new MutationObserver((records, observer) => {
         if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
-    // typeof throws on a top-level class of a script that stopped before
-    // the class.
-    const hasMain = () => {
-        try {
-            return typeof Main !== "undefined";
-        } catch {
-            return false;
-        }
-    };
     window.addEventListener("load", () => setTimeout(() => {
-        if (!hasMain() && window.onload === null) reportBootError(lastError);
+        if (window.onload === null) reportBootError(mainError);
     }));
     window.addEventListener("unhandledrejection", (e) =>
-        post({ type: "log", text: `unhandled rejection: ${e.reason}` }));
+        post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
 
     if (!settings.smooth) {
         document.addEventListener("DOMContentLoaded", () => {
