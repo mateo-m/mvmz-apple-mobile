@@ -321,8 +321,8 @@
         }
     };
 
-    // Loads the resume point as Scene_Load loads a save, after the boot
-    // scene and the plugins that change it chose the next scene. The
+    // The boot scene, and the plugins that change it, choose the next
+    // scene in start(), so the map must replace that choice after it. The
     // plugins are in the page when the load event comes.
     if (resumePoint) {
         window.addEventListener("load", () => {
@@ -332,6 +332,7 @@
             }
             const start = Scene_Boot.prototype.start;
             Scene_Boot.prototype.start = function () {
+                Scene_Boot.prototype.start = start;
                 start.call(this);
                 try {
                     DataManager.createGameObjects();
@@ -355,7 +356,6 @@
                     post({ type: "log", text: `the resume point did not load: ${error}`.toWellFormed() });
                     DataManager.setupNewGame();
                 }
-                resumePoint = null;
             };
         });
     }
@@ -388,16 +388,23 @@
             (document.activeElement || document).dispatchEvent(event);
         },
         pause() {
-            paused = true;
-            const context = audioContext();
-            // RPG Maker MZ stops the game on any unhandled rejection. WebKit
-            // rejects a pending suspend() or play() with AbortError when a
-            // resume() or pause() comes before it ends.
-            if (context && context.state === "running") context.suspend().catch(() => {});
-            playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
-            playingMedia.forEach((m) => m.pause());
-            // A pause before the boot loaded the resume point keeps it.
+            // A second pause finds the media that the first one paused, and
+            // the resume would then play none of it.
+            if (!paused) {
+                paused = true;
+                const context = audioContext();
+                // RPG Maker MZ stops the game on any unhandled rejection. WebKit
+                // rejects a pending suspend() or play() with AbortError when a
+                // resume() or pause() comes before it ends.
+                if (context && context.state === "running") context.suspend().catch(() => {});
+                playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
+                playingMedia.forEach((m) => m.pause());
+            }
             try {
+                // Until the boot scene ends, the resume point that the page
+                // loads is still the newest game state.
+                const scene = typeof SceneManager !== "undefined" && SceneManager._scene;
+                if (scene && !(scene instanceof Scene_Boot)) resumePoint = null;
                 return resumePoint || makeResumePoint();
             } catch (error) {
                 post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });

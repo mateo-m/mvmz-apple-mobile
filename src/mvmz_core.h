@@ -57,8 +57,9 @@ void mvmz_inject_key(int usage, int pressed);
 // The pause also keeps the game state in memory when the game is on its
 // map or in a menu over it. When iOS stops the web content process, for
 // example in the background, the core loads the page again from that
-// state at the next mvmz_resume. The saves of the player stay as they
-// are.
+// state, at the next mvmz_resume when the game is paused. If the state
+// does not load, the game starts at its title screen. The saves of the
+// player stay as they are.
 void mvmz_pause(void (*done)(void *userdata), void *userdata);
 
 // Starts the frames, the sound and the video again.
@@ -71,7 +72,7 @@ void mvmz_resume(void);
 void mvmz_set_speed(int multiplier);
 
 // Smooth (1) or sharp (0) scaling of the picture. Sharp by default. The
-// next mvmz_start reads it.
+// next load of the page reads it.
 void mvmz_set_smooth(int smooth);
 
 // MARK: - What the game reports
