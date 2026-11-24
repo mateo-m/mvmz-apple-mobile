@@ -96,6 +96,11 @@ __attribute__((visibility("hidden")))
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation
       withError:(NSError *)error {
+    // A new load cancels the one before it, for example when a game
+    // calls location.reload() twice. The new load goes on.
+    if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) {
+        return;
+    }
     logLine([NSString stringWithFormat:@"index.html did not load: %@", error]);
     exitGame(NO);
 }
