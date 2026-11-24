@@ -96,9 +96,10 @@ __attribute__((visibility("hidden")))
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation
       withError:(NSError *)error {
-    // A load that fails after the first one keeps the page that was
-    // there. A reload that a second reload replaces fails with -999 or
-    // with WebKit error 102.
+    // The back-forward list gets its first item when the first page
+    // commits. A later load that fails, for example a reload that a
+    // second reload replaces (-999 or WebKit error 102), keeps the page
+    // that was there.
     if (webView.backForwardList.currentItem) {
         return;
     }
