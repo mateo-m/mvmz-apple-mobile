@@ -194,6 +194,7 @@
     let scheduled = false;
     let paused = false;
     let reportFrame = true;
+    let frameShown = false;
     let frames = 0;
     let speed = settings.speed;
     let speedApplied = false;
@@ -233,8 +234,9 @@
         }
         for (const callback of callbacks) callback(time);
         frames++;
-        if (reportFrame) {
+        if (reportFrame && !bootReported) {
             reportFrame = false;
+            frameShown = true;
             post({ type: "frame" });
         }
         // A game or a plugin can change the resolution from any script,
@@ -353,13 +355,36 @@
         const original = console[level].bind(console);
         console[level] = (...args) => {
             original(...args);
-            post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}` });
+            post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    window.addEventListener("error", (e) =>
-        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` }));
+    // An error in the top level of main.js stops the start of the game.
+    // MV sets window.onload at the end of main.js. MZ adds its load
+    // listener at the end of main.run(), and after that its own error
+    // listener stops the start. The filename of the error is the script
+    // that threw, which can be a script that main.js called.
+    let mainError = null;
+    window.addEventListener("error", (e) => {
+        const script = document.currentScript?.src;
+        if (script && new URL(script).pathname.endsWith("/js/main.js")) mainError = e.message;
+        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
+    });
+    // MV and MZ print their other boot errors into an error printer.
+    let bootReported = false;
+    const reportBootError = (message) => {
+        if (bootReported || frameShown || !message) return;
+        bootReported = true;
+        post({ type: "bootError", message: message.replace(/\s*\n\s*/g, ": ").toWellFormed() });
+    };
+    new MutationObserver((records, observer) => {
+        if (frameShown) return observer.disconnect();
+        reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("load", () => setTimeout(() => {
+        if (window.onload === null) reportBootError(mainError);
+    }));
     window.addEventListener("unhandledrejection", (e) =>
-        post({ type: "log", text: `unhandled rejection: ${e.reason}` }));
+        post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
 
     if (!settings.smooth) {
         document.addEventListener("DOMContentLoaded", () => {

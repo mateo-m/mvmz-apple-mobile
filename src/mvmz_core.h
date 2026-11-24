@@ -80,10 +80,16 @@ void mvmz_set_size_callback(void (*callback)(int width, int height, void *userda
                             void *userdata);
 
 // Called when the game stops by itself. clean is 1 when the game closed
-// itself. clean is 0 when index.html did not load or the web content
-// process stopped. In that case the page is gone, and a reload would
-// start the game from its title screen.
+// itself. clean is 0 when index.html did not load, the game did not
+// start, or the web content process stopped. In that case the game
+// cannot go on.
 void mvmz_set_exit_callback(void (*callback)(int clean, void *userdata), void *userdata);
+
+// Called with the error that stopped the game before its first frame,
+// for example a script error in main.js. The exit callback with clean 0
+// follows.
+void mvmz_set_error_callback(void (*callback)(const char *message, void *userdata),
+                             void *userdata);
 
 // Called with the text of the game's window.alert. The page waits until
 // the callback returns. window.confirm always gets yes.
