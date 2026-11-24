@@ -34,6 +34,8 @@ static void (*gAlert)(const char *, void *);
 static void *gAlertData;
 static void (*gLog)(const char *, void *);
 static void *gLogData;
+static void (*gError)(const char *, void *);
+static void *gErrorData;
 
 static void logLine(NSString *line) {
     if (gLog) {
@@ -88,6 +90,13 @@ __attribute__((visibility("hidden")))
         }
     } else if ([type isEqualToString:@"log"]) {
         logLine([NSString stringWithFormat:@"%@", body[@"text"]]);
+    } else if ([type isEqualToString:@"bootError"]) {
+        NSString *text = body[@"message"];
+        logLine([NSString stringWithFormat:@"the game did not start: %@", text]);
+        if (gError) {
+            gError(text.UTF8String, gErrorData);
+        }
+        exitGame(NO);
     } else if ([type isEqualToString:@"exit"]) {
         logLine(@"the game closed itself");
         exitGame(YES);
@@ -274,6 +283,11 @@ void mvmz_set_alert_callback(void (*callback)(const char *, void *), void *userd
 void mvmz_set_log_callback(void (*callback)(const char *, void *), void *userdata) {
     gLog = callback;
     gLogData = userdata;
+}
+
+void mvmz_set_error_callback(void (*callback)(const char *, void *), void *userdata) {
+    gError = callback;
+    gErrorData = userdata;
 }
 
 double mvmz_fps(void) {

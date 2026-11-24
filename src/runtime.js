@@ -356,8 +356,21 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}` });
         };
     }
-    window.addEventListener("error", (e) =>
-        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` }));
+    let firstError = null;
+    window.addEventListener("error", (e) => {
+        firstError ??= e.message;
+        post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` });
+    });
+    // MV stops at an error in main.js, and MZ does not start after an
+    // error before the load event. MZ also prints its own boot errors,
+    // such as a plugin file that did not load. The game then never asks
+    // for a frame, and the host shows no page without a frame.
+    window.addEventListener("load", () => setTimeout(() => {
+        if (nextId !== 1) return;
+        const printed = document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim();
+        const message = firstError || printed;
+        if (message) post({ type: "bootError", message });
+    }));
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}` }));
 
