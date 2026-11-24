@@ -234,7 +234,7 @@
         }
         for (const callback of callbacks) callback(time);
         frames++;
-        if (reportFrame) {
+        if (reportFrame && !bootReported) {
             reportFrame = false;
             frameShown = true;
             post({ type: "frame" });
@@ -360,13 +360,12 @@
     }
     let lastError = null;
     window.addEventListener("error", (e) => {
-        lastError = e.message;
+        if (e.filename.endsWith("/js/main.js")) lastError = e.message;
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` });
     });
     // MV stops at an error in main.js before it sets window.onload. The
     // main.js of MZ defines Main and starts from its own load listener.
-    // MV and MZ print their other boot errors into an error printer, and
-    // then show no frame.
+    // MV and MZ print their other boot errors into an error printer.
     let bootReported = false;
     const reportBootError = (message) => {
         if (bootReported || frameShown || !message) return;
@@ -377,8 +376,17 @@
         if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
+    // typeof throws on a top-level class of a script that stopped before
+    // the class.
+    const hasMain = () => {
+        try {
+            return typeof Main !== "undefined";
+        } catch {
+            return false;
+        }
+    };
     window.addEventListener("load", () => setTimeout(() => {
-        if (typeof Main === "undefined" && window.onload === null) reportBootError(lastError);
+        if (!hasMain() && window.onload === null) reportBootError(lastError);
     }));
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}` }));
