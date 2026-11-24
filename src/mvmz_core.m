@@ -96,6 +96,13 @@ __attribute__((visibility("hidden")))
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation
       withError:(NSError *)error {
+    // The back-forward list gets its first item when the first page
+    // commits. A later load that fails, for example a reload that a
+    // second reload replaces (-999 or WebKit error 102), keeps the page
+    // that was there.
+    if (webView.backForwardList.currentItem) {
+        return;
+    }
     logLine([NSString stringWithFormat:@"index.html did not load: %@", error]);
     exitGame(NO);
 }
