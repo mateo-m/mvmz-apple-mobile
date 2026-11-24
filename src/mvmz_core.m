@@ -286,18 +286,18 @@ void mvmz_inject_key(int usage, int pressed) {
 
 // A pause fails on a page that is gone or that has not loaded yet. The
 // resume point of the last pause, or the one that the page loads, is then
-// still the newest game state.
+// still the newest game state. The page can also stop before its answer
+// comes, so that point holds from the pause on.
 void mvmz_pause(void (*done)(void *), void *userdata) {
     gPaused = YES;
+    if (!gResumePoint) {
+        gResumePoint = gLoadingResumePoint;
+    }
     WKWebView *webView = gWebView;
     [webView evaluateJavaScript:@"__mvmz.pause()"
               completionHandler:^(id result, NSError *error) {
-                  if (webView == gWebView) {
-                      if (!error) {
-                          gResumePoint = [result isKindOfClass:NSString.class] ? result : nil;
-                      } else if (!gResumePoint) {
-                          gResumePoint = gLoadingResumePoint;
-                      }
+                  if (webView == gWebView && !error) {
+                      gResumePoint = [result isKindOfClass:NSString.class] ? result : nil;
                   }
                   if (done) {
                       done(userdata);
