@@ -109,11 +109,13 @@ __attribute__((visibility("hidden")))
         // The page posts a frame after each load and each resume. The game
         // then runs past its resume point, so a stop from now on, or a
         // reload by the game itself, must not go back to it. A frame while
-        // paused comes from a page that loaded after the pause failed on it.
-        // That page is still at the point.
+        // paused can come from a page that loads its point after the pause
+        // failed on it. That page is still at the point. A frame from a
+        // resumed page that the core reads after the next pause is past it.
         if (gPaused) {
             runJS(@"__mvmz.pause()");
-        } else {
+        }
+        if (!gPaused || !gLoadingResumePoint) {
             gResumePoint = nil;
         }
         if (gLoadingResumePoint) {
