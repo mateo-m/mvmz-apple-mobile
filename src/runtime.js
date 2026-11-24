@@ -356,20 +356,27 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}` });
         };
     }
-    let firstError = null;
+    let lastError = null;
     window.addEventListener("error", (e) => {
-        firstError ??= e.message;
+        lastError = e.message;
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}` });
     });
-    // MV stops at an error in main.js, and MZ does not start after an
-    // error before the load event. MZ also prints its own boot errors,
-    // such as a plugin file that did not load. The game then never asks
-    // for a frame, and the host shows no page without a frame.
+    // MV stops at an error in main.js before it sets window.onload. The
+    // main.js of MZ defines Main and starts from its own load listener.
+    // MV and MZ print their other boot errors into an error printer, and
+    // then never ask for a frame.
+    let bootReported = false;
+    const reportBootError = (message) => {
+        if (bootReported || nextId !== 1 || !message) return;
+        bootReported = true;
+        post({ type: "bootError", message: message.replace(/\s*\n\s*/g, ": ") });
+    };
+    new MutationObserver((records, observer) => {
+        if (nextId !== 1) return observer.disconnect();
+        reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
+    }).observe(document, { childList: true, subtree: true, characterData: true });
     window.addEventListener("load", () => setTimeout(() => {
-        if (nextId !== 1) return;
-        const printed = document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim();
-        const message = firstError || printed;
-        if (message) post({ type: "bootError", message });
+        if (typeof Main === "undefined" && window.onload === null) reportBootError(lastError);
     }));
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}` }));
