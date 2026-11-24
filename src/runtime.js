@@ -359,9 +359,10 @@
         };
     }
     // An error in the top level of main.js stops the start of the game.
-    // MV sets window.onload at the end of main.js, and MZ adds its load
-    // listener at the end of main.run(). The filename of the error is the
-    // script that threw, which can be a script that main.js called.
+    // MV sets window.onload at the end of main.js. MZ adds its load
+    // listener at the end of main.run(), and after that its own error
+    // listener stops the start. The filename of the error is the script
+    // that threw, which can be a script that main.js called.
     let mainError = null;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
