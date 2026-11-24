@@ -53,6 +53,12 @@ void mvmz_inject_key(int usage, int pressed);
 // Holds the game's frames, and pauses its sound and its video. done runs
 // when the page stopped, so a snapshot of the web view then shows the
 // frame the game stopped on. done can be null.
+//
+// The pause also keeps the game state in memory when the game is on its
+// map or in a menu over it. When iOS stops the web content process, for
+// example in the background, the core loads the page again from that
+// state at the next mvmz_resume. The saves of the player stay as they
+// are.
 void mvmz_pause(void (*done)(void *userdata), void *userdata);
 
 // Starts the frames, the sound and the video again.
@@ -81,8 +87,8 @@ void mvmz_set_size_callback(void (*callback)(int width, int height, void *userda
 
 // Called when the game stops by itself. clean is 1 when the game closed
 // itself. clean is 0 when index.html did not load, the game did not
-// start, or the web content process stopped. In that case the game
-// cannot go on.
+// start, or the web content process stopped with no state from a pause
+// to go back to (see mvmz_pause). In that case the game cannot go on.
 void mvmz_set_exit_callback(void (*callback)(int clean, void *userdata), void *userdata);
 
 // Called with the error that stopped the game before its first frame,

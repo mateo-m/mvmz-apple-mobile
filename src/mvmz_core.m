@@ -23,6 +23,13 @@ static int gSpeed = 1;
 static BOOL gSmooth;
 static double gFps;
 static char *gDetails;
+// runtime.js makes the resume point at each pause. It lives until the
+// game runs again.
+static NSString *gResumePoint;
+static BOOL gPaused;
+// The web content process stopped while the game was paused. The page
+// starts again from the resume point when the game resumes.
+static BOOL gPageStopped;
 
 static void (*gFrame)(void *);
 static void *gFrameData;
@@ -53,6 +60,38 @@ static void exitGame(BOOL clean) {
     if (gExit) {
         gExit(clean, gExitData);
     }
+}
+
+static NSString *jsonString(id object) {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+}
+
+static void addRuntime(WKUserContentController *controller, NSString *resumePoint) {
+    NSMutableDictionary *settings = [@{
+        @"speed" : @(gSpeed),
+        @"smooth" : @(gSmooth),
+        @"simulator" : @(TARGET_OS_SIMULATOR),
+    } mutableCopy];
+    settings[@"resumePoint"] = resumePoint;
+    NSString *source = [NSString stringWithFormat:@"window.__mvmzSettings = %@;\n%s", jsonString(settings),
+                                                  runtimeSource];
+    WKUserScript *script = [[WKUserScript alloc] initWithSource:source
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                               forMainFrameOnly:YES];
+    [controller addUserScript:script];
+}
+
+// The resume point is used once, so a game that stops again goes back
+// only to a resume point of a later pause.
+static void reloadFromResumePoint(void) {
+    logLine(@"the game starts again from its resume point");
+    WKUserContentController *controller = gWebView.configuration.userContentController;
+    [controller removeAllUserScripts];
+    addRuntime(controller, gResumePoint);
+    gResumePoint = nil;
+    gPageStopped = NO;
+    [gWebView reload];
 }
 
 __attribute__((visibility("hidden")))
@@ -117,10 +156,17 @@ __attribute__((visibility("hidden")))
 }
 
 // The web content process ran out of memory or crashed, and the page is
-// gone with it.
+// gone with it. iOS stops it to get memory back, also while the app is
+// in the background.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
     logLine(@"the web content process stopped");
-    exitGame(NO);
+    if (!gResumePoint) {
+        exitGame(NO);
+    } else if (gPaused) {
+        gPageStopped = YES;
+    } else {
+        reloadFromResumePoint();
+    }
 }
 
 // WebKit shows no alert without a UI delegate, for example from a plugin
@@ -157,11 +203,6 @@ static NSString *originHost(const char *gameId) {
     return host;
 }
 
-static NSString *jsonString(id object) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
-    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-}
-
 void *mvmz_start(const char *gameDir, const char *gameId) {
     mvmz_stop();
     if (!gameDir || !gameDir[0]) {
@@ -182,17 +223,7 @@ void *mvmz_start(const char *gameDir, const char *gameId) {
     config.allowsInlineMediaPlayback = YES;
 #endif
 
-    NSDictionary *settings = @{
-        @"speed" : @(gSpeed),
-        @"smooth" : @(gSmooth),
-        @"simulator" : @(TARGET_OS_SIMULATOR),
-    };
-    NSString *source = [NSString stringWithFormat:@"window.__mvmzSettings = %@;\n%s", jsonString(settings),
-                                                  runtimeSource];
-    WKUserScript *script = [[WKUserScript alloc] initWithSource:source
-                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                               forMainFrameOnly:YES];
-    [config.userContentController addUserScript:script];
+    addRuntime(config.userContentController, nil);
     [config.userContentController addScriptMessageHandler:gMessages name:@"mvmz"];
 
     gWebView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:config];
@@ -231,6 +262,9 @@ void mvmz_stop(void) {
     gFps = 0;
     free(gDetails);
     gDetails = NULL;
+    gResumePoint = nil;
+    gPaused = NO;
+    gPageStopped = NO;
 }
 
 // runtime.js turns the scancode into the keyCode the game reads.
@@ -238,17 +272,37 @@ void mvmz_inject_key(int usage, int pressed) {
     runJS([NSString stringWithFormat:@"__mvmz.key(%d,%d)", usage, pressed]);
 }
 
+// A pause that fails, for example on a page that is gone, keeps the
+// resume point of the last pause.
 void mvmz_pause(void (*done)(void *), void *userdata) {
-    [gWebView evaluateJavaScript:@"__mvmz.pause()"
-               completionHandler:^(id result, NSError *error) {
-                   if (done) {
-                       done(userdata);
-                   }
-               }];
+    gPaused = YES;
+    WKWebView *webView = gWebView;
+    [webView evaluateJavaScript:@"__mvmz.pause()"
+              completionHandler:^(id result, NSError *error) {
+                  if (!error && webView == gWebView) {
+                      gResumePoint = [result isKindOfClass:NSString.class] ? result : nil;
+                  }
+                  if (done) {
+                      done(userdata);
+                  }
+              }];
 }
 
+// A resume that fails keeps the resume point, so a stop that WebKit
+// reports during or after the resume still loads the page from it.
 void mvmz_resume(void) {
-    runJS(@"__mvmz.resume()");
+    gPaused = NO;
+    if (gPageStopped) {
+        reloadFromResumePoint();
+        return;
+    }
+    WKWebView *webView = gWebView;
+    [webView evaluateJavaScript:@"__mvmz.resume()"
+              completionHandler:^(id result, NSError *error) {
+                  if (!error && webView == gWebView) {
+                      gResumePoint = nil;
+                  }
+              }];
 }
 
 void mvmz_set_speed(int multiplier) {

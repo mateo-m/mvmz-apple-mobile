@@ -292,6 +292,56 @@
         frames = 0;
     }, 1000);
 
+    // MARK: resume point
+
+    // The game state as a save file holds it. mvmz_core.m keeps it while
+    // the game is paused, and starts the page again from it when iOS
+    // stops the web content process. A battle, a message on the screen,
+    // and a scene change hold state that a save file does not have.
+    let resumePoint = settings.resumePoint;
+    const makeResumePoint = () => {
+        if (typeof Scene_Map === "undefined" || !SceneManager._scene) return null;
+        const onMap = SceneManager._scene instanceof Scene_Map || SceneManager._stack.includes(Scene_Map);
+        if (!onMap || SceneManager.isSceneChanging() || $gameParty.inBattle() || $gameMessage.isBusy()) return null;
+        // onAfterLoad reads these. A save sets them in onBeforeSave, which
+        // also counts the save, so the resume point sets them itself.
+        const system = $gameSystem;
+        const kept = [system._framesOnSave, system._bgmOnSave, system._bgsOnSave];
+        system._framesOnSave = Graphics.frameCount;
+        system._bgmOnSave = AudioManager.saveBgm();
+        system._bgsOnSave = AudioManager.saveBgs();
+        try {
+            return JsonEx.stringify(DataManager.makeSaveContents());
+        } finally {
+            [system._framesOnSave, system._bgmOnSave, system._bgsOnSave] = kept;
+        }
+    };
+
+    // Loads the resume point as Scene_Load loads a save, after the boot
+    // scene and the plugins that change it chose the next scene. The
+    // plugins are in the page when the load event comes.
+    if (resumePoint) {
+        window.addEventListener("load", () => {
+            if (typeof Scene_Boot === "undefined") return;
+            const start = Scene_Boot.prototype.start;
+            Scene_Boot.prototype.start = function () {
+                start.call(this);
+                try {
+                    DataManager.createGameObjects();
+                    DataManager.extractSaveContents(JsonEx.parse(resumePoint));
+                    DataManager.correctDataErrors?.();
+                    $gameSystem.onAfterLoad();
+                    SceneManager.goto(Scene_Map);
+                    post({ type: "log", text: "the game is back at its resume point" });
+                } catch (error) {
+                    post({ type: "log", text: `the resume point did not load: ${error}`.toWellFormed() });
+                    DataManager.setupNewGame();
+                }
+                resumePoint = null;
+            };
+        });
+    }
+
     let playingMedia = [];
     const audioContext = () => (typeof WebAudio !== "undefined" ? WebAudio._context : null);
 
@@ -328,6 +378,13 @@
             if (context && context.state === "running") context.suspend().catch(() => {});
             playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
             playingMedia.forEach((m) => m.pause());
+            // A pause before the boot loaded the resume point keeps it.
+            try {
+                return resumePoint || makeResumePoint();
+            } catch (error) {
+                post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });
+                return null;
+            }
         },
         resume() {
             paused = false;
