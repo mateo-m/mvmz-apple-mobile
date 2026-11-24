@@ -292,6 +292,74 @@
         frames = 0;
     }, 1000);
 
+    // MARK: resume point
+
+    // The game saves only on the map or in a menu over it, with no event
+    // running. Elsewhere, state that a save file does not hold, such as a
+    // battle that loads or a common event that waits, would get lost.
+    let resumePoint = settings.resumePoint;
+    const makeResumePoint = () => {
+        if (typeof Scene_Map === "undefined" || !SceneManager._scene) return null;
+        const scene = SceneManager._scene;
+        const onMap =
+            scene instanceof Scene_Map || (scene instanceof Scene_MenuBase && SceneManager._stack.includes(Scene_Map));
+        if (!onMap || SceneManager.isSceneChanging() || $gameParty.inBattle() || $gameMessage.isBusy() ||
+            $gameMap.isEventRunning() || $gameTemp.isCommonEventReserved()) return null;
+        const system = $gameSystem;
+        const kept = [system._framesOnSave, system._bgmOnSave, system._bgsOnSave];
+        try {
+            // onAfterLoad reads these. A save sets them in onBeforeSave, which
+            // also counts the save, so the resume point sets them itself.
+            system._framesOnSave = Graphics.frameCount;
+            system._bgmOnSave = AudioManager.saveBgm();
+            system._bgsOnSave = AudioManager.saveBgs();
+            // MV keeps the slot that the save screen selects outside the
+            // save contents. MZ keeps it in $gameSystem.
+            return JsonEx.stringify({ ...DataManager.makeSaveContents(), savefileId: DataManager._lastAccessedId });
+        } finally {
+            [system._framesOnSave, system._bgmOnSave, system._bgsOnSave] = kept;
+        }
+    };
+
+    // The boot scene, and the plugins that change it, choose the next
+    // scene in start(), so the map must replace that choice after it. The
+    // plugins are in the page when the load event comes.
+    if (resumePoint) {
+        window.addEventListener("load", () => {
+            if (typeof Scene_Boot === "undefined") {
+                resumePoint = null;
+                return;
+            }
+            const start = Scene_Boot.prototype.start;
+            Scene_Boot.prototype.start = function () {
+                Scene_Boot.prototype.start = start;
+                start.call(this);
+                try {
+                    DataManager.createGameObjects();
+                    const contents = JsonEx.parse(resumePoint);
+                    DataManager.extractSaveContents(contents);
+                    if (contents.savefileId) DataManager._lastAccessedId = contents.savefileId;
+                    DataManager.correctDataErrors?.();
+                    // A balloon or an animation that a parallel event waits
+                    // for had a sprite on the old page. MZ ends the wait only
+                    // when that sprite goes away.
+                    const characters = [$gamePlayer, ...$gamePlayer.followers()._data, ...$gameMap.vehicles(),
+                        ...$gameMap.events()];
+                    for (const character of characters) {
+                        character.endBalloon();
+                        character.endAnimation();
+                    }
+                    $gameSystem.onAfterLoad();
+                    SceneManager.goto(Scene_Map);
+                    post({ type: "log", text: "the game is back at its resume point" });
+                } catch (error) {
+                    post({ type: "log", text: `the resume point did not load: ${error}`.toWellFormed() });
+                    DataManager.setupNewGame();
+                }
+            };
+        });
+    }
+
     let playingMedia = [];
     const audioContext = () => (typeof WebAudio !== "undefined" ? WebAudio._context : null);
 
@@ -320,14 +388,28 @@
             (document.activeElement || document).dispatchEvent(event);
         },
         pause() {
-            paused = true;
-            const context = audioContext();
-            // RPG Maker MZ stops the game on any unhandled rejection. WebKit
-            // rejects a pending suspend() or play() with AbortError when a
-            // resume() or pause() comes before it ends.
-            if (context && context.state === "running") context.suspend().catch(() => {});
-            playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
-            playingMedia.forEach((m) => m.pause());
+            // A second pause finds the media that the first one paused, and
+            // the resume would then play none of it.
+            if (!paused) {
+                paused = true;
+                const context = audioContext();
+                // RPG Maker MZ stops the game on any unhandled rejection. WebKit
+                // rejects a pending suspend() or play() with AbortError when a
+                // resume() or pause() comes before it ends.
+                if (context && context.state === "running") context.suspend().catch(() => {});
+                playingMedia = [...document.querySelectorAll("video, audio")].filter((m) => !m.paused);
+                playingMedia.forEach((m) => m.pause());
+            }
+            try {
+                // Until the boot scene ends, the resume point that the page
+                // loads is still the newest game state.
+                const scene = typeof SceneManager !== "undefined" && SceneManager._scene;
+                if (scene && !(scene instanceof Scene_Boot)) resumePoint = null;
+                return resumePoint || makeResumePoint();
+            } catch (error) {
+                post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });
+                return null;
+            }
         },
         resume() {
             paused = false;
