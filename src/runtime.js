@@ -110,14 +110,16 @@
         existsSync: (p) => send("HEAD", p).status === 200,
         statSync: stat,
         lstatSync: stat,
-        // The game folder has no links.
-        realpathSync: (p) => {
-            stat(p);
-            return path.resolve(String(p));
-        },
+        realpathSync: (p) =>
+            decodeURIComponent(ok(send("HEAD", p), "realpath", p).getResponseHeader("X-Mvmz-Real-Path")),
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
+            if (xhr.getResponseHeader("X-Mvmz-Kind") === "directory") {
+                const error = new Error(`EISDIR: illegal operation on a directory, read '${p}'`);
+                error.code = "EISDIR";
+                throw error;
+            }
             if (encoding) return xhr.responseText;
             const text = xhr.responseText;
             const bytes = new Uint8Array(text.length);
