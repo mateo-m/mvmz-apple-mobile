@@ -37,7 +37,16 @@ $(OUT)/obj/%.o: src/%.m src/mvmz_core.h src/MvmzFileServer.h src/runtime.js Make
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(OUT)/run-tests: tests/run.m $(OUT)/libmvmz.a
+	$(CC) $(CFLAGS) $^ -framework WebKit -framework AppKit -framework Metal \
+		-framework UniformTypeIdentifiers -o $@
+
+# Runs each game in tests/games on macOS.
+test:
+	$(MAKE) SDK=macosx out/macosx/run-tests
+	out/macosx/run-tests tests/games
+
 clean:
 	rm -rf out
 
-.PHONY: clean
+.PHONY: clean test
