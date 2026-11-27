@@ -142,17 +142,33 @@
             if (mode) throw fsError("ENOTSUP", "copyfile", from, ` (mode ${mode})`);
             fs.writeFileSync(to, fs.readFileSync(from));
         },
-        createWriteStream: (p) => {
+        createWriteStream: (p, options) => {
+            const settings = typeof options === "string" ? { encoding: options } : options || {};
+            if (settings.flags && settings.flags !== "w") {
+                throw fsError("ENOTSUP", "open", p, ` (flags ${settings.flags})`);
+            }
             const chunks = [];
-            const write = (chunk) =>
-                void chunks.push(typeof chunk === "string" ? new TextEncoder().encode(chunk) : chunk);
+            const take = (args) => {
+                const done = typeof args[args.length - 1] === "function" ? args.pop() : () => {};
+                const [chunk, encoding = settings.encoding] = args;
+                if (typeof chunk === "string") {
+                    if (encoding && !/^utf-?8$/i.test(encoding)) {
+                        throw fsError("ENOTSUP", "write", p, ` (encoding ${encoding})`);
+                    }
+                    chunks.push(new TextEncoder().encode(chunk));
+                } else if (chunk != null) {
+                    chunks.push(chunk);
+                }
+                return done;
+            };
             return {
-                write,
-                end: (chunk = "") => {
-                    write(chunk);
+                write: (...args) => (take(args)(), true),
+                end: (...args) => {
+                    const done = take(args);
                     const bytes = new Uint8Array(chunks.reduce((size, part) => size + part.length, 0));
                     chunks.reduce((offset, part) => (bytes.set(part, offset), offset + part.length), 0);
                     fs.writeFileSync(p, bytes);
+                    done();
                 },
             };
         },
