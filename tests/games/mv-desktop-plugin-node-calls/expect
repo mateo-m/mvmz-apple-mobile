@@ -11,4 +11,11 @@ log: console.log: read a folder threw EISDIR
 log: console.log: read folder names true
 log: console.log: read folder entries index.html file=true folder=false link=false, js file=false folder=true link=false, js-link file=false folder=false link=true
 log: console.log: read folder entries later index.html file=true folder=false link=false, js file=false folder=true link=false, js-link file=false folder=false link=true
+log: console.log: promise make folders true
+log: console.log: promise read written file hello
+log: console.log: promise read folder entries note.md file=true
+log: console.log: promise stat 5
+log: console.log: promise access missing threw ENOENT
+log: console.log: promise remove false
+log: console.log: promise module true
 frame
