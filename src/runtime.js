@@ -442,8 +442,8 @@
     }
     // An error in the top level of main.js stops the start of the game
     // when it comes before main.js sets window.onload, as MV does at its
-    // end. A plugin can then set window.onload: DKTools calls the missing
-    // onload of main.js from it and throws, and another plugin can start
+    // end. A plugin can then set window.onload that calls the
+    // missing onload of main.js and throws, and another plugin can start
     // the game itself, also after a wait. So a window.onload that a plugin
     // set stops the start only when it throws. MZ asks for its first frame
     // after the load event, and its own error listener stops the start
