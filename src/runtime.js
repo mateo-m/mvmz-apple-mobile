@@ -183,7 +183,7 @@
     const toBytes = (data) =>
         typeof data === "string"
             ? new TextEncoder().encode(data)
-            : new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength);
+            : new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength).slice();
     const crypto = {
         createHash: (algorithm) => {
             if (algorithm !== "sha256") throw new Error(`Digest method not supported: ${algorithm}`);
@@ -234,10 +234,10 @@
             throw error;
         }
         if (!loaded.has(file)) {
+            const source = fs.readFileSync(file, "utf8");
             const module = { exports: {} };
             loaded.set(file, module);
             const dirname = path.dirname(file);
-            const source = fs.readFileSync(file, "utf8");
             try {
                 new Function("module", "exports", "require", "__filename", "__dirname", source)(
                     module,
