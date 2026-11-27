@@ -474,15 +474,26 @@
     // The load listener of this script runs before the ones of the game.
     // WebKit fires pageshow after the last load listener and its promise
     // callbacks, and before any timer.
+    let startPromise = null;
     window.addEventListener("load", () => {
         loading = true;
+        const onload = window.onload;
+        if (!mainError || !onload) return;
+        // An async onload, such as one that waits and then calls the
+        // missing onload of main.js, fails with a rejection, not an error.
+        window.onload = function (event) {
+            startPromise = onload.call(this, event);
+            return startPromise;
+        };
     });
     window.addEventListener("pageshow", () => {
         loading = false;
         if (nextId === 1 && (window.onload === null || loadThrew)) reportBootError(mainError);
     });
-    window.addEventListener("unhandledrejection", (e) =>
-        post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
+    window.addEventListener("unhandledrejection", (e) => {
+        post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() });
+        if (e.promise === startPromise && nextId === 1) reportBootError(mainError);
+    });
 
     if (!settings.smooth) {
         document.addEventListener("DOMContentLoaded", () => {
