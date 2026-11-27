@@ -440,15 +440,15 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    // An error in the top level of main.js stops the start of the game
-    // when it comes before main.js sets window.onload, as MV does at its
-    // end. A plugin can then set window.onload that calls the
-    // missing onload of main.js and throws, and another plugin can start
-    // the game itself, also after a wait. So a window.onload that a plugin
-    // set stops the start only when it throws. MZ asks for its first frame
-    // after the load event, and its own error listener stops the start
-    // before that. The filename of the error is the script that threw,
-    // which can be a script that main.js called.
+    // An error in the top level of main.js stops the start of the game when
+    // it comes before main.js sets window.onload, as MV does at its end. A
+    // plugin can then set window.onload that calls the missing onload of
+    // main.js and throws, and another plugin can start the game itself, also
+    // after a wait. So a window.onload that a plugin set stops the start
+    // only when it throws or its promise rejects. MZ asks for its first
+    // frame after the load event, and its own error listener stops the start
+    // before that. The filename of the error is the script that threw, which
+    // can be a script that main.js called.
     let mainError = null;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
