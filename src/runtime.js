@@ -442,18 +442,22 @@
     }
     // An error in the top level of main.js stops the start of the game
     // when it comes before main.js sets window.onload, as MV does at its
-    // end. A plugin, such as DKTools, can then set window.onload and call
-    // the missing onload of main.js from it, so the load check asks if the
-    // game asked for a frame, not if window.onload is set. MZ asks for its
-    // first frame later, after its own error listener can stop the start.
-    // The filename of the error is the script that threw, which can be a
-    // script that main.js called.
+    // end. A plugin can then set window.onload: DKTools calls the missing
+    // onload of main.js from it and throws, and another plugin can start
+    // the game itself, also after a wait. So a window.onload that a plugin
+    // set stops the start only when it throws. MZ asks for its first frame
+    // after the load event, and its own error listener stops the start
+    // before that. The filename of the error is the script that threw,
+    // which can be a script that main.js called.
     let mainError = null;
+    let loading = false;
+    let loadThrew = false;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
         if (script && new URL(script).pathname.endsWith("/js/main.js") && window.onload === null) {
             mainError = e.message;
         }
+        if (loading) loadThrew = true;
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
     // MV and MZ print their other boot errors into an error printer.
@@ -467,9 +471,16 @@
         if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
-    window.addEventListener("load", () => setTimeout(() => {
-        if (nextId === 1) reportBootError(mainError);
-    }));
+    // The load listener of this script runs before the ones of the game.
+    // WebKit fires pageshow after the last load listener and its promise
+    // callbacks, and before any timer.
+    window.addEventListener("load", () => {
+        loading = true;
+    });
+    window.addEventListener("pageshow", () => {
+        loading = false;
+        if (nextId === 1 && (window.onload === null || loadThrew)) reportBootError(mainError);
+    });
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
 
