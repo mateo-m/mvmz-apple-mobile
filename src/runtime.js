@@ -362,7 +362,7 @@
             loaded.set(real, module);
             const dirname = path.dirname(real);
             try {
-                if (real.endsWith(".json")) {
+                if (real.toLowerCase().endsWith(".json")) {
                     module.exports = JSON.parse(source);
                 } else {
                     new Function("module", "exports", "require", "__filename", "__dirname", source).call(

@@ -1,5 +1,12 @@
 log: console.log: upper case name ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 log: console.log: parts ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+log: console.log: length 55 9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318
+log: console.log: length 56 b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a
+log: console.log: length 64 ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb
+log: console.log: length 65 635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0
+log: console.log: length 119 31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb
+log: console.log: length 120 2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c
+log: console.log: split across blocks 1e3c4f4750c8c29bbfa9ced317788176b156d342e57f7777f62fd7221a44312f
 log: console.log: hex input threw Hash input encoding not supported: hex
 log: console.log: base64 digest threw Digest encoding not supported: base64
 log: console.log: same copy true
@@ -7,5 +14,6 @@ log: console.log: loads 1
 log: console.log: this true
 log: console.log: json settings
 log: console.log: json without ending settings
+log: console.log: json with capitals capitals
 log: console.log: package name threw MODULE_NOT_FOUND
 frame
