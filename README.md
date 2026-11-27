@@ -33,6 +33,8 @@ make SDK=macosx
 
 The results go to `out/`.
 
+`make test` starts each game in `tests/games` on macOS, and fails when the core does not report a line of the game's `expect` file.
+
 `scripts/check-no-host-code.sh` fails when the core names a launcher or asks the host for a function. A host sets each value through `mvmz_core.h`.
 
 ## License
