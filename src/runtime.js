@@ -157,7 +157,7 @@
                     }
                     chunks.push(new TextEncoder().encode(chunk));
                 } else if (chunk != null) {
-                    chunks.push(chunk);
+                    chunks.push(new Uint8Array(chunk));
                 }
                 return done;
             };

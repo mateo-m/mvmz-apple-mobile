@@ -10,6 +10,7 @@ log: console.log: copy with a mode threw ENOTSUP
 log: console.log: write stream en
 log: console.log: write stream bytes 0,255,1,2
 log: console.log: write stream callbacks ok write,end
+log: console.log: write stream reused bytes 65,66
 log: console.log: append stream threw ENOTSUP
 log: console.log: hex stream threw ENOTSUP
 log: console.log: read a folder threw EISDIR

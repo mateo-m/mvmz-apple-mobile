@@ -56,6 +56,16 @@ check("write stream callbacks", () => {
     fs.rmdirSync("/save");
     return `${written} ${calls.join(",")}`;
 });
+check("write stream reused bytes", () => {
+    const stream = fs.createWriteStream("save/reused.bin");
+    const chunk = new Uint8Array([65]);
+    stream.write(chunk, () => (chunk[0] = 66));
+    stream.end(chunk);
+    const written = fs.readFileSync("/save/reused.bin");
+    fs.unlinkSync("/save/reused.bin");
+    fs.rmdirSync("/save");
+    return written.join(",");
+});
 check("append stream", () => fs.createWriteStream("save/log.txt", { flags: "a" }));
 check("hex stream", () => fs.createWriteStream("save/hex.bin").write("c3", "hex"));
 check("read a folder", () => fs.readFileSync("/js"));
