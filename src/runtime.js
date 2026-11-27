@@ -65,10 +65,11 @@
     const urlFor = (p) =>
         origin + path.resolve(String(p)).split("/").map(encodeURIComponent).join("/");
 
-    const send = (method, p, body, binary) => {
+    const send = (method, p, body, binary, headers = {}) => {
         const xhr = new XMLHttpRequest();
         xhr.open(method, urlFor(p), false);
         if (binary) xhr.overrideMimeType("text/plain; charset=x-user-defined");
+        for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
         xhr.send(body);
         return xhr;
     };
@@ -103,6 +104,10 @@
         existsSync: (p) => send("HEAD", p).status === 200,
         statSync: stat,
         lstatSync: stat,
+        realpathSync: (p) => {
+            const xhr = ok(send("HEAD", p, null, false, { "X-Mvmz-Real-Path": "1" }), "realpath", p);
+            return decodeURIComponent(xhr.getResponseHeader("X-Mvmz-Real-Path"));
+        },
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
@@ -147,59 +152,134 @@
 
     // Plugins hash files while they load, and WebCrypto can only hash
     // asynchronously.
-    const sha256 = (data) => {
-        const primes = [];
-        for (let n = 2; primes.length < 64; n++) if (primes.every((p) => n % p)) primes.push(n);
-        const fraction = (x) => ((x - Math.floor(x)) * 2 ** 32) >>> 0;
-        const k = primes.map((p) => fraction(Math.cbrt(p)));
-        const h = primes.slice(0, 8).map((p) => fraction(Math.sqrt(p)));
-        const blocks = new Uint8Array(Math.ceil((data.length + 9) / 64) * 64);
-        blocks.set(data);
-        blocks[data.length] = 0x80;
-        const view = new DataView(blocks.buffer);
-        view.setUint32(blocks.length - 8, Math.floor(data.length / 2 ** 29));
-        view.setUint32(blocks.length - 4, (data.length * 8) >>> 0);
-        const rotate = (x, n) => (x >>> n) | (x << (32 - n));
-        const w = new Uint32Array(64);
-        for (let offset = 0; offset < blocks.length; offset += 64) {
-            for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
+    const K = new Int32Array([
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ]);
+
+    const createSha256 = () => {
+        const state = new Int32Array([
+            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        ]);
+        const w = new Int32Array(64);
+        const tail = new Uint8Array(64);
+        let filled = 0;
+        let length = 0;
+
+        const compress = (bytes, offset) => {
+            for (let i = 0; i < 16; i++, offset += 4) {
+                w[i] = (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+            }
             for (let i = 16; i < 64; i++) {
-                const s0 = rotate(w[i - 15], 7) ^ rotate(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-                const s1 = rotate(w[i - 2], 17) ^ rotate(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-                w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+                const x = w[i - 15];
+                const y = w[i - 2];
+                const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+                const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+                w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
             }
-            let [a, b, c, d, e, f, g, z] = h;
+            let a = state[0];
+            let b = state[1];
+            let c = state[2];
+            let d = state[3];
+            let e = state[4];
+            let f = state[5];
+            let g = state[6];
+            let h = state[7];
             for (let i = 0; i < 64; i++) {
-                const t1 = z + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i];
-                const t2 = (rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
-                [z, g, f, e, d, c, b, a] = [g, f, e, (d + t1) >>> 0, c, b, a, (t1 + t2) >>> 0];
+                const s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+                const t1 = (h + s1 + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+                const s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+                const t2 = (s0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+                h = g;
+                g = f;
+                f = e;
+                e = (d + t1) | 0;
+                d = c;
+                c = b;
+                b = a;
+                a = (t1 + t2) | 0;
             }
-            [a, b, c, d, e, f, g, z].forEach((x, i) => (h[i] = (h[i] + x) >>> 0));
-        }
-        const digest = new Uint8Array(32);
-        h.forEach((x, i) => new DataView(digest.buffer).setUint32(i * 4, x));
-        return digest;
+            state[0] += a;
+            state[1] += b;
+            state[2] += c;
+            state[3] += d;
+            state[4] += e;
+            state[5] += f;
+            state[6] += g;
+            state[7] += h;
+        };
+
+        const update = (bytes) => {
+            length += bytes.length;
+            let i = 0;
+            if (filled) {
+                i = Math.min(64 - filled, bytes.length);
+                tail.set(bytes.subarray(0, i), filled);
+                filled += i;
+                if (filled < 64) return;
+                compress(tail, 0);
+            }
+            for (; i + 64 <= bytes.length; i += 64) compress(bytes, i);
+            tail.set(bytes.subarray(i));
+            filled = bytes.length - i;
+        };
+
+        const digest = () => {
+            const padding = new Uint8Array((filled < 56 ? 64 : 128) - filled);
+            padding[0] = 0x80;
+            const view = new DataView(padding.buffer);
+            view.setUint32(padding.length - 8, Math.floor(length / 2 ** 29));
+            view.setUint32(padding.length - 4, (length * 8) >>> 0);
+            update(padding);
+            const result = new Uint8Array(32);
+            state.forEach((x, i) => new DataView(result.buffer).setInt32(i * 4, x));
+            return result;
+        };
+
+        return { update, digest };
     };
-    const toBytes = (data) =>
-        typeof data === "string"
-            ? new TextEncoder().encode(data)
-            : new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength).slice();
+
+    const bytesOf = (data, encoding) => {
+        if (typeof data === "string") {
+            if (encoding === undefined || /^utf-?8$/i.test(encoding)) return new TextEncoder().encode(data);
+            throw new Error(`Hash input encoding not supported: ${encoding}`);
+        }
+        if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        const error = new TypeError("The data argument must be a string, a Buffer, a TypedArray, or a DataView");
+        error.code = "ERR_INVALID_ARG_TYPE";
+        throw error;
+    };
+
     const crypto = {
         createHash: (algorithm) => {
-            if (algorithm !== "sha256") throw new Error(`Digest method not supported: ${algorithm}`);
-            const parts = [];
+            if (String(algorithm).toLowerCase() !== "sha256") {
+                throw new Error(`Digest method not supported: ${algorithm}`);
+            }
+            const sha256 = createSha256();
+            let finished = false;
+            const checkOpen = () => {
+                if (!finished) return;
+                const error = new Error("Digest already called");
+                error.code = "ERR_CRYPTO_HASH_FINALIZED";
+                throw error;
+            };
             const hash = {
-                update: (data) => {
-                    parts.push(toBytes(data));
+                update: (data, encoding) => {
+                    checkOpen();
+                    sha256.update(bytesOf(data, encoding));
                     return hash;
                 },
                 digest: (encoding) => {
-                    const all = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
-                    parts.reduce((offset, part) => (all.set(part, offset), offset + part.length), 0);
-                    const digest = sha256(all);
-                    if (encoding === "hex") return Array.from(digest, (x) => x.toString(16).padStart(2, "0")).join("");
-                    if (encoding === "base64") return btoa(String.fromCharCode(...digest));
-                    return digest;
+                    checkOpen();
+                    if (encoding !== "hex") throw new Error(`Digest encoding not supported: ${encoding}`);
+                    finished = true;
+                    return Array.from(sha256.digest(), (x) => x.toString(16).padStart(2, "0")).join("");
                 },
             };
             return hash;
@@ -233,26 +313,34 @@
             error.code = "MODULE_NOT_FOUND";
             throw error;
         }
-        if (!loaded.has(file)) {
-            const source = fs.readFileSync(file, "utf8");
+        // The file server finds a file whose name has other capitals, so
+        // only the real path names one file.
+        const real = fs.realpathSync(file);
+        if (!loaded.has(real)) {
+            const source = fs.readFileSync(real, "utf8");
             const module = { exports: {} };
-            loaded.set(file, module);
-            const dirname = path.dirname(file);
+            loaded.set(real, module);
+            const dirname = path.dirname(real);
             try {
-                new Function("module", "exports", "require", "__filename", "__dirname", source)(
-                    module,
-                    module.exports,
-                    requireFrom(dirname),
-                    file,
-                    dirname,
-                );
+                if (real.endsWith(".json")) {
+                    module.exports = JSON.parse(source);
+                } else {
+                    new Function("module", "exports", "require", "__filename", "__dirname", source).call(
+                        module.exports,
+                        module,
+                        module.exports,
+                        requireFrom(dirname),
+                        real,
+                        dirname,
+                    );
+                }
             } catch (error) {
                 // As in Node, the next require of a file that failed runs it again.
-                loaded.delete(file);
+                loaded.delete(real);
                 throw error;
             }
         }
-        return loaded.get(file).exports;
+        return loaded.get(real).exports;
     };
 
     window.nw = nwGui;

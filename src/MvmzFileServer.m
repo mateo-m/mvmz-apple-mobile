@@ -163,6 +163,11 @@ static NSString *mimeType(NSString *path) {
 
     NSDictionary<NSFileAttributeKey, id> *attributes = [files attributesOfItemAtPath:path error:nil];
     headers[@"X-Mvmz-Kind"] = directory ? @"directory" : @"file";
+    if ([request valueForHTTPHeaderField:@"X-Mvmz-Real-Path"]) {
+        NSString *real = realPath(path) ?: path;
+        headers[@"X-Mvmz-Real-Path"] = [([real isEqualToString:_root] ? @"/" : [real substringFromIndex:_root.length])
+            stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLPathAllowedCharacterSet];
+    }
     headers[@"X-Mvmz-Mtime"] =
         @((long long)([attributes.fileModificationDate timeIntervalSince1970] * 1000)).stringValue;
 
