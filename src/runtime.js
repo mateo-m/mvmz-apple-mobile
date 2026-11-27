@@ -440,17 +440,20 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    // An error in the top level of main.js can stop the start of the game.
-    // A plugin, such as DKTools, can set window.onload after main.js and
-    // call the onload of main.js from it, so window.onload does not show
-    // if the game starts. MV asks for its first frame in window.onload. MZ
-    // asks for it later, after its own error listener can stop the start.
+    // An error in the top level of main.js stops the start of the game
+    // when it comes before main.js sets window.onload, as MV does at its
+    // end. A plugin, such as DKTools, can then set window.onload and call
+    // the missing onload of main.js from it, so the load check asks if the
+    // game asked for a frame, not if window.onload is set. MZ asks for its
+    // first frame later, after its own error listener can stop the start.
     // The filename of the error is the script that threw, which can be a
     // script that main.js called.
     let mainError = null;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
-        if (script && new URL(script).pathname.endsWith("/js/main.js")) mainError = e.message;
+        if (script && new URL(script).pathname.endsWith("/js/main.js") && window.onload === null) {
+            mainError = e.message;
+        }
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
     // MV and MZ print their other boot errors into an error printer.
