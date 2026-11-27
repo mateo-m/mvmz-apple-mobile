@@ -143,6 +143,69 @@
     }
     fs.exists = (p, callback) => setTimeout(() => callback(fs.existsSync(p)));
 
+    // MARK: crypto
+
+    // Plugins hash files while they load, and WebCrypto can only hash
+    // asynchronously.
+    const sha256 = (data) => {
+        const primes = [];
+        for (let n = 2; primes.length < 64; n++) if (primes.every((p) => n % p)) primes.push(n);
+        const fraction = (x) => ((x - Math.floor(x)) * 2 ** 32) >>> 0;
+        const k = primes.map((p) => fraction(Math.cbrt(p)));
+        const h = primes.slice(0, 8).map((p) => fraction(Math.sqrt(p)));
+        const blocks = new Uint8Array(Math.ceil((data.length + 9) / 64) * 64);
+        blocks.set(data);
+        blocks[data.length] = 0x80;
+        const view = new DataView(blocks.buffer);
+        view.setUint32(blocks.length - 8, Math.floor(data.length / 2 ** 29));
+        view.setUint32(blocks.length - 4, (data.length * 8) >>> 0);
+        const rotate = (x, n) => (x >>> n) | (x << (32 - n));
+        const w = new Uint32Array(64);
+        for (let offset = 0; offset < blocks.length; offset += 64) {
+            for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
+            for (let i = 16; i < 64; i++) {
+                const s0 = rotate(w[i - 15], 7) ^ rotate(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+                const s1 = rotate(w[i - 2], 17) ^ rotate(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+                w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+            }
+            let [a, b, c, d, e, f, g, z] = h;
+            for (let i = 0; i < 64; i++) {
+                const t1 = z + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i];
+                const t2 = (rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
+                [z, g, f, e, d, c, b, a] = [g, f, e, (d + t1) >>> 0, c, b, a, (t1 + t2) >>> 0];
+            }
+            [a, b, c, d, e, f, g, z].forEach((x, i) => (h[i] = (h[i] + x) >>> 0));
+        }
+        const digest = new Uint8Array(32);
+        h.forEach((x, i) => new DataView(digest.buffer).setUint32(i * 4, x));
+        return digest;
+    };
+    const toBytes = (data) =>
+        typeof data === "string"
+            ? new TextEncoder().encode(data)
+            : new Uint8Array(data.buffer || data, data.byteOffset || 0, data.byteLength);
+    const crypto = {
+        createHash: (algorithm) => {
+            if (algorithm !== "sha256") throw new Error(`Digest method not supported: ${algorithm}`);
+            const parts = [];
+            const hash = {
+                update: (data) => {
+                    parts.push(toBytes(data));
+                    return hash;
+                },
+                digest: (encoding) => {
+                    const all = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
+                    parts.reduce((offset, part) => (all.set(part, offset), offset + part.length), 0);
+                    const digest = sha256(all);
+                    if (encoding === "hex") return Array.from(digest, (x) => x.toString(16).padStart(2, "0")).join("");
+                    if (encoding === "base64") return btoa(String.fromCharCode(...digest));
+                    return digest;
+                },
+            };
+            return hash;
+        },
+    };
+
     // MARK: NW.js
 
     const exit = () => post({ type: "exit" });
@@ -153,16 +216,47 @@
     const nwApp = { argv: [], manifest: {}, quit: exit, closeAllWindows: exit };
     const nwGui = { App: nwApp, Window: { get: () => nwWindow }, Menu: class { createMacBuiltin() {} } };
     const os = { platform: () => "linux", homedir: () => "/", tmpdir: () => "/", EOL: "\n" };
-    const modules = { fs, path, os, "nw.gui": nwGui };
+    const modules = { fs, path, os, crypto, "nw.gui": nwGui };
 
-    window.nw = nwGui;
-    window.require = (name) => {
+    // Plugins also load CommonJS files of the game folder.
+    const loaded = new Map();
+    const requireFrom = (folder) => (name) => {
         const found = modules[name.replace(/^node:/, "")];
         if (found) return found;
-        const error = new Error(`Cannot find module '${name}'`);
-        error.code = "MODULE_NOT_FOUND";
-        throw error;
+        const file = /^\.{0,2}\//.test(name)
+            ? [name, `${name}.js`]
+                  .map((p) => path.resolve(folder, p))
+                  .find((p) => fs.existsSync(p) && !fs.statSync(p).isDirectory())
+            : null;
+        if (!file) {
+            const error = new Error(`Cannot find module '${name}'`);
+            error.code = "MODULE_NOT_FOUND";
+            throw error;
+        }
+        if (!loaded.has(file)) {
+            const module = { exports: {} };
+            loaded.set(file, module);
+            const dirname = path.dirname(file);
+            const source = fs.readFileSync(file, "utf8");
+            try {
+                new Function("module", "exports", "require", "__filename", "__dirname", source)(
+                    module,
+                    module.exports,
+                    requireFrom(dirname),
+                    file,
+                    dirname,
+                );
+            } catch (error) {
+                // As in Node, the next require of a file that failed runs it again.
+                loaded.delete(file);
+                throw error;
+            }
+        }
+        return loaded.get(file).exports;
     };
+
+    window.nw = nwGui;
+    window.require = requireFrom("/");
     // MZ's main.js stops with an error when this path starts with
     // /private/var, so it must stay relative to the game folder.
     window.process = {
