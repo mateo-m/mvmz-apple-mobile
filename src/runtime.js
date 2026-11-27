@@ -440,19 +440,17 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    // An error in the top level of main.js stops the start of the game
-    // when it comes before main.js sets window.onload, as MV does at its
-    // end. A plugin, such as DKTools, can set window.onload after that, so
-    // the check reads window.onload at the time of the error. MZ adds its
-    // load listener at the end of main.run(), and after that its own error
-    // listener stops the start. The filename of the error is the script
-    // that threw, which can be a script that main.js called.
+    // An error in the top level of main.js can stop the start of the game.
+    // A plugin, such as DKTools, can set window.onload after main.js and
+    // call the onload of main.js from it, so window.onload does not show
+    // if the game starts. MV asks for its first frame in window.onload. MZ
+    // asks for it later, after its own error listener can stop the start.
+    // The filename of the error is the script that threw, which can be a
+    // script that main.js called.
     let mainError = null;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
-        if (script && new URL(script).pathname.endsWith("/js/main.js") && window.onload === null) {
-            mainError = e.message;
-        }
+        if (script && new URL(script).pathname.endsWith("/js/main.js")) mainError = e.message;
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
     // MV and MZ print their other boot errors into an error printer.
@@ -466,7 +464,9 @@
         if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
-    window.addEventListener("load", () => setTimeout(() => reportBootError(mainError)));
+    window.addEventListener("load", () => setTimeout(() => {
+        if (nextId === 1) reportBootError(mainError);
+    }));
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
 

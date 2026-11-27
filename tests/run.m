@@ -85,9 +85,15 @@ int main(int argc, char **argv) {
             return 0;
         }
 
-        int failures = 0;
-        NSArray<NSString *> *names = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:nil]
+        NSError *error;
+        NSArray<NSString *> *names = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:&error]
             sortedArrayUsingSelector:@selector(compare:)];
+        if (!names) {
+            fprintf(stderr, "cannot read %s: %s\n", folder.UTF8String, error.localizedDescription.UTF8String);
+            return 1;
+        }
+        int games = 0;
+        int failures = 0;
         for (NSString *name in names) {
             NSString *gameDir = [folder stringByAppendingPathComponent:name];
             NSString *expect = [NSString stringWithContentsOfFile:[gameDir stringByAppendingPathComponent:@"expect"]
@@ -96,6 +102,7 @@ int main(int argc, char **argv) {
             if (!expect) {
                 continue;
             }
+            games++;
             NSArray<NSString *> *lines = runGame(gameDir, 10, YES);
             NSMutableArray<NSString *> *missing = [NSMutableArray array];
             for (NSString *wanted in [expect componentsSeparatedByString:@"\n"]) {
@@ -111,6 +118,10 @@ int main(int argc, char **argv) {
             } else {
                 printf("ok   %s\n", name.UTF8String);
             }
+        }
+        if (!games) {
+            fprintf(stderr, "no game in %s has a file \"expect\"\n", folder.UTF8String);
+            return 1;
         }
         return failures ? 1 : 0;
     }
