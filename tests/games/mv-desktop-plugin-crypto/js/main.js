@@ -24,4 +24,5 @@ check("json", () => require("./data/info.json").name);
 check("json without ending", () => require("./data/info").name);
 check("json with capitals", () => require("./data/capitals.json").name);
 check("package name", () => require("index.html"));
+check("hashbang", () => require("./js/libs/tool").name);
 window.onload = () => requestAnimationFrame(() => {});

@@ -365,7 +365,9 @@
                 if (real.toLowerCase().endsWith(".json")) {
                     module.exports = JSON.parse(source);
                 } else {
-                    new Function("module", "exports", "require", "__filename", "__dirname", source).call(
+                    // Node skips a first "#!" line, but a Function body cannot hold one.
+                    const body = source.replace(/^#!.*/, "");
+                    new Function("module", "exports", "require", "__filename", "__dirname", body).call(
                         module.exports,
                         module,
                         module.exports,

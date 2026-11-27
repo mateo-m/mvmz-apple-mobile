@@ -16,4 +16,5 @@ log: console.log: json settings
 log: console.log: json without ending settings
 log: console.log: json with capitals capitals
 log: console.log: package name threw MODULE_NOT_FOUND
+log: console.log: hashbang tool
 frame
