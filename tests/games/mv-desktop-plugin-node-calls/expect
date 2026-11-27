@@ -1,0 +1,11 @@
+log: console.log: platform darwin
+log: console.log: save folder /save/Library/Application Support/Game/saves
+log: console.log: folder url /img/picture.png
+log: console.log: read url true
+log: console.log: other url threw ERR_INVALID_URL_SCHEME
+log: console.log: relative ../art/a.png
+log: console.log: real path /js/main.js
+log: console.log: copy to save folder true
+log: console.log: copy with a mode threw ENOTSUP
+log: console.log: read a folder threw EISDIR
+frame

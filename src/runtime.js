@@ -42,6 +42,13 @@
             return normalize(out).replace(/(.)\/$/, "$1");
         },
         isAbsolute: (p) => p.startsWith("/"),
+        relative: (from, to) => {
+            const a = path.resolve(from).split("/").filter(Boolean);
+            const b = path.resolve(to).split("/").filter(Boolean);
+            let i = 0;
+            while (i < a.length && i < b.length && a[i] === b[i]) i++;
+            return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/");
+        },
         dirname: (p) => {
             const trimmed = p.replace(/\/+$/, "");
             const i = trimmed.lastIndexOf("/");
@@ -61,9 +68,21 @@
 
     // MARK: fs
 
+    // Node's fs also takes a file URL. Here the URLs that pathToFileURL
+    // makes are on the core's own address, so only those are file URLs.
+    const pathOf = (p) => {
+        if (!(p instanceof URL)) return String(p);
+        if (p.protocol + "//" + p.host !== origin) {
+            const error = new TypeError(`The URL must be of scheme file: ${p.href}`);
+            error.code = "ERR_INVALID_URL_SCHEME";
+            throw error;
+        }
+        return decodeURIComponent(p.pathname);
+    };
+
     // "/" is the game folder.
     const urlFor = (p) =>
-        origin + path.resolve(String(p)).split("/").map(encodeURIComponent).join("/");
+        origin + path.resolve(pathOf(p)).split("/").map(encodeURIComponent).join("/");
 
     const send = (method, p, body, binary, headers = {}) => {
         const xhr = new XMLHttpRequest();
@@ -74,11 +93,11 @@
         return xhr;
     };
 
+    const fsError = (code, op, p, detail = "") =>
+        Object.assign(new Error(`${code}: ${op} '${p}'${detail}`), { code });
+
     const fail = (xhr, op, p) => {
-        const code = xhr.status === 404 ? "ENOENT" : "EIO";
-        const error = new Error(`${code}: ${op} '${p}' (${xhr.status} ${xhr.responseText})`);
-        error.code = code;
-        throw error;
+        throw fsError(xhr.status === 404 ? "ENOENT" : "EIO", op, p, ` (${xhr.status} ${xhr.responseText})`);
     };
 
     const ok = (xhr, op, p) => {
@@ -111,6 +130,7 @@
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
+            if (xhr.getResponseHeader("X-Mvmz-Kind") === "directory") throw fsError("EISDIR", "read", p);
             if (encoding) return xhr.responseText;
             const text = xhr.responseText;
             const bytes = new Uint8Array(text.length);
@@ -118,17 +138,15 @@
             return bytes;
         },
         writeFileSync: (p, data) => void ok(send("PUT", p, data), "open", p),
+        copyFileSync: (from, to, mode = 0) => {
+            if (mode) throw fsError("ENOTSUP", "copyfile", from, ` (mode ${mode})`);
+            fs.writeFileSync(to, fs.readFileSync(from));
+        },
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),
         readdirSync: (p) => JSON.parse(ok(send("GET", p), "scandir", p).responseText),
-        renameSync: (from, to) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("MOVE", urlFor(from), false);
-            xhr.setRequestHeader("Destination", urlFor(to));
-            xhr.send();
-            ok(xhr, "rename", from);
-        },
+        renameSync: (from, to) => void ok(send("MOVE", from, null, false, { Destination: urlFor(to) }), "rename", from),
     };
     // Some plugins use the callback forms. They run the same requests
     // one turn later.
@@ -295,8 +313,20 @@
     const nwWindow = new Proxy({}, { get: (target, key) => (key in target ? target[key] : noop) });
     const nwApp = { argv: [], manifest: {}, quit: exit, closeAllWindows: exit };
     const nwGui = { App: nwApp, Window: { get: () => nwWindow }, Menu: class { createMacBuiltin() {} } };
-    const os = { platform: () => "linux", homedir: () => "/", tmpdir: () => "/", EOL: "\n" };
-    const modules = { fs, path, os, crypto, "nw.gui": nwGui };
+    // A desktop release of MV or MZ runs on Windows or macOS, and a plugin
+    // can stop the game on any other platform. Plugins keep their own saves
+    // in the home folder, and the app keeps the saves of a game over an
+    // update or a restore only in its save folder.
+    const os = { platform: () => "darwin", homedir: () => "/save", tmpdir: () => "/", EOL: "\n" };
+    // Plugins turn file paths into file URLs to load game files. Here the
+    // core serves those files, so the URLs use the core's scheme.
+    const url = {
+        pathToFileURL: (p) => {
+            const href = urlFor(p);
+            return new URL(String(p).endsWith("/") && !href.endsWith("/") ? href + "/" : href);
+        },
+    };
+    const modules = { fs, path, os, url, crypto, "nw.gui": nwGui };
 
     // Plugins also load CommonJS files of the game folder.
     const loaded = new Map();
@@ -358,7 +388,7 @@
     // MZ's main.js stops with an error when this path starts with
     // /private/var, so it must stay relative to the game folder.
     window.process = {
-        platform: "linux",
+        platform: os.platform(),
         env: {},
         argv: [],
         versions: {},
