@@ -234,7 +234,7 @@
         }
         for (const callback of callbacks) callback(time);
         frames++;
-        if (reportFrame && !bootReported) {
+        if (reportFrame && !bootReported && callbacks.length) {
             reportFrame = false;
             frameShown = true;
             post({ type: "frame" });
@@ -488,11 +488,11 @@
     });
     window.addEventListener("pageshow", () => {
         loading = false;
-        if (nextId === 1 && (window.onload === null || loadThrew)) reportBootError(mainError);
+        if (!waiting.size && (window.onload === null || loadThrew)) reportBootError(mainError);
     });
     window.addEventListener("unhandledrejection", (e) => {
         post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() });
-        if (e.promise === startPromise && nextId === 1) reportBootError(mainError);
+        if (e.promise === startPromise && !waiting.size) reportBootError(mainError);
     });
 
     if (!settings.smooth) {
