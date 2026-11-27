@@ -20,7 +20,11 @@ check("copy to save folder", () => {
     const folder = path.join(require("os").homedir(), "copies");
     fs.mkdirSync(folder);
     fs.copyFileSync("/index.html", path.join(folder, "index.html"));
-    return fs.readFileSync("/save/copies/index.html", "utf8").includes("js/main.js");
+    const copied = fs.readFileSync("/save/copies/index.html", "utf8").includes("js/main.js");
+    fs.unlinkSync("/save/copies/index.html");
+    fs.rmdirSync("/save/copies");
+    fs.rmdirSync("/save");
+    return copied;
 });
 check("copy with a mode", () => fs.copyFileSync("/index.html", "/save/copies/index.html", 1));
 check("read a folder", () => fs.readFileSync("/js"));
