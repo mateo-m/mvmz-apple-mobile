@@ -7,6 +7,13 @@ log: console.log: relative ../art/a.png
 log: console.log: real path /js/main.js
 log: console.log: copy to save folder true
 log: console.log: copy with a mode threw ENOTSUP
+log: console.log: write stream en
+log: console.log: write stream bytes 0,255,1,2
+log: console.log: write stream callbacks ok write,end
+log: console.log: write stream reused bytes 65,66
+log: console.log: append stream threw ENOTSUP
+log: console.log: stream at an offset threw ENOTSUP
+log: console.log: hex stream threw ENOTSUP
 log: console.log: read a folder threw EISDIR
 log: console.log: read folder names true
 log: console.log: read folder entries index.html file=true folder=false link=false, js file=false folder=true link=false, js-link file=false folder=false link=true

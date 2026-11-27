@@ -27,6 +27,48 @@ check("copy to save folder", () => {
     return copied;
 });
 check("copy with a mode", () => fs.copyFileSync("/index.html", "/save/copies/index.html", 1));
+check("write stream", () => {
+    const stream = fs.createWriteStream("save/language.txt");
+    stream.write("e", "utf-8");
+    stream.write("n", "utf-8");
+    stream.end("");
+    const written = fs.readFileSync("/save/language.txt", "utf8");
+    fs.unlinkSync("/save/language.txt");
+    fs.rmdirSync("/save");
+    return written;
+});
+check("write stream bytes", () => {
+    const stream = fs.createWriteStream("save/bytes.bin");
+    stream.write(new Uint8Array([0, 255]));
+    stream.end(new Uint8Array([1, 2]));
+    const written = fs.readFileSync("/save/bytes.bin");
+    fs.unlinkSync("/save/bytes.bin");
+    fs.rmdirSync("/save");
+    return written.join(",");
+});
+check("write stream callbacks", () => {
+    const calls = [];
+    const stream = fs.createWriteStream("save/done.txt");
+    stream.write("o", () => calls.push("write"));
+    stream.end("k", "utf8", () => calls.push("end"));
+    const written = fs.readFileSync("/save/done.txt", "utf8");
+    fs.unlinkSync("/save/done.txt");
+    fs.rmdirSync("/save");
+    return `${written} ${calls.join(",")}`;
+});
+check("write stream reused bytes", () => {
+    const stream = fs.createWriteStream("save/reused.bin");
+    const chunk = new Uint8Array([65]);
+    stream.write(chunk, () => (chunk[0] = 66));
+    stream.end(chunk);
+    const written = fs.readFileSync("/save/reused.bin");
+    fs.unlinkSync("/save/reused.bin");
+    fs.rmdirSync("/save");
+    return written.join(",");
+});
+check("append stream", () => fs.createWriteStream("save/log.txt", { flags: "a" }));
+check("stream at an offset", () => fs.createWriteStream("save/at.txt", { start: 4 }));
+check("hex stream", () => fs.createWriteStream("save/hex.bin").write("c3", "hex"));
 check("read a folder", () => fs.readFileSync("/js"));
 const describeEntries = (entries) =>
     entries
