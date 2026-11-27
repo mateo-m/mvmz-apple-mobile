@@ -142,6 +142,13 @@
             if (mode) throw fsError("ENOTSUP", "copyfile", from, ` (mode ${mode})`);
             fs.writeFileSync(to, fs.readFileSync(from));
         },
+        createWriteStream: (p) => {
+            let text = "";
+            return {
+                write: (chunk) => void (text += chunk),
+                end: (chunk = "") => fs.writeFileSync(p, text + chunk),
+            };
+        },
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),

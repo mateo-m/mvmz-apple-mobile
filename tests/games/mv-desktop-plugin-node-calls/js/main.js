@@ -27,6 +27,16 @@ check("copy to save folder", () => {
     return copied;
 });
 check("copy with a mode", () => fs.copyFileSync("/index.html", "/save/copies/index.html", 1));
+check("write stream", () => {
+    const stream = fs.createWriteStream("save/language.txt");
+    stream.write("e", "utf-8");
+    stream.write("n", "utf-8");
+    stream.end("");
+    const written = fs.readFileSync("/save/language.txt", "utf8");
+    fs.unlinkSync("/save/language.txt");
+    fs.rmdirSync("/save");
+    return written;
+});
 check("read a folder", () => fs.readFileSync("/js"));
 const describeEntries = (entries) =>
     entries
