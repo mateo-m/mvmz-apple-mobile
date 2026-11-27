@@ -67,6 +67,7 @@ check("write stream reused bytes", () => {
     return written.join(",");
 });
 check("append stream", () => fs.createWriteStream("save/log.txt", { flags: "a" }));
+check("stream at an offset", () => fs.createWriteStream("save/at.txt", { start: 4 }));
 check("hex stream", () => fs.createWriteStream("save/hex.bin").write("c3", "hex"));
 check("read a folder", () => fs.readFileSync("/js"));
 const describeEntries = (entries) =>

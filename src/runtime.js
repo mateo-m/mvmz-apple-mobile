@@ -144,9 +144,10 @@
         },
         createWriteStream: (p, options) => {
             const settings = typeof options === "string" ? { encoding: options } : options || {};
-            if (settings.flags && settings.flags !== "w") {
-                throw fsError("ENOTSUP", "open", p, ` (flags ${settings.flags})`);
-            }
+            const unsupported = Object.entries({ flags: "w", start: 0 }).find(
+                ([name, value]) => settings[name] != null && settings[name] !== value,
+            );
+            if (unsupported) throw fsError("ENOTSUP", "open", p, ` (${unsupported[0]} ${settings[unsupported[0]]})`);
             const chunks = [];
             const take = (args) => {
                 const done = typeof args[args.length - 1] === "function" ? args.pop() : () => {};
