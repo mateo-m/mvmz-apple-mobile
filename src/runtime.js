@@ -93,11 +93,11 @@
         return xhr;
     };
 
+    const fsError = (code, op, p, detail = "") =>
+        Object.assign(new Error(`${code}: ${op} '${p}'${detail}`), { code });
+
     const fail = (xhr, op, p) => {
-        const code = xhr.status === 404 ? "ENOENT" : "EIO";
-        const error = new Error(`${code}: ${op} '${p}' (${xhr.status} ${xhr.responseText})`);
-        error.code = code;
-        throw error;
+        throw fsError(xhr.status === 404 ? "ENOENT" : "EIO", op, p, ` (${xhr.status} ${xhr.responseText})`);
     };
 
     const ok = (xhr, op, p) => {
@@ -130,6 +130,7 @@
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
+            if (xhr.getResponseHeader("X-Mvmz-Kind") === "directory") throw fsError("EISDIR", "read", p);
             if (encoding) return xhr.responseText;
             const text = xhr.responseText;
             const bytes = new Uint8Array(text.length);
@@ -137,7 +138,10 @@
             return bytes;
         },
         writeFileSync: (p, data) => void ok(send("PUT", p, data), "open", p),
-        copyFileSync: (from, to) => fs.writeFileSync(to, fs.readFileSync(from)),
+        copyFileSync: (from, to, mode = 0) => {
+            if (mode) throw fsError("ENOTSUP", "copyfile", from, ` (mode ${mode})`);
+            fs.writeFileSync(to, fs.readFileSync(from));
+        },
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),

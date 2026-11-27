@@ -16,4 +16,12 @@ check("read url", () => fs.readFileSync(pathToFileURL("/index.html"), "utf8").in
 check("other url", () => fs.existsSync(new URL("https://example.com/index.html")));
 check("relative", () => path.relative("/content/mods", "/content/art/a.png"));
 check("real path", () => fs.realpathSync("/JS/Main.js"));
+check("copy to save folder", () => {
+    const folder = path.join(require("os").homedir(), "copies");
+    fs.mkdirSync(folder);
+    fs.copyFileSync("/index.html", path.join(folder, "index.html"));
+    return fs.readFileSync("/save/copies/index.html", "utf8").includes("js/main.js");
+});
+check("copy with a mode", () => fs.copyFileSync("/index.html", "/save/copies/index.html", 1));
+check("read a folder", () => fs.readFileSync("/js"));
 window.onload = () => requestAnimationFrame(() => {});
