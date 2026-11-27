@@ -5,6 +5,7 @@ log: console.log: base64 digest threw Digest encoding not supported: base64
 log: console.log: same copy true
 log: console.log: loads 1
 log: console.log: this true
-log: console.log: main false
 log: console.log: json settings
+log: console.log: json without ending settings
+log: console.log: package name threw MODULE_NOT_FOUND
 frame

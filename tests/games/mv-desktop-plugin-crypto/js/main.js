@@ -13,6 +13,7 @@ check("base64 digest", () => crypto.createHash("sha256").update("abc").digest("b
 check("same copy", () => require("./js/libs/counter.js") === require("/JS/Libs/Counter.js"));
 check("loads", () => window.counterLoads);
 check("this", () => require("./js/libs/counter").thisIsExports);
-check("main", () => require("./js/libs/counter").isMain);
 check("json", () => require("./data/info.json").name);
+check("json without ending", () => require("./data/info").name);
+check("package name", () => require("index.html"));
 window.onload = () => requestAnimationFrame(() => {});

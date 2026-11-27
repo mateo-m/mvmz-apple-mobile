@@ -300,22 +300,32 @@
 
     // Plugins also load CommonJS files of the game folder.
     const loaded = new Map();
-    const requireFrom = (folder) => (name) => {
-        const found = modules[name.replace(/^node:/, "")];
-        if (found) return found;
-        const file = /^\.{0,2}\//.test(name)
-            ? [name, `${name}.js`]
-                  .map((p) => path.resolve(folder, p))
-                  .find((p) => fs.existsSync(p) && !fs.statSync(p).isDirectory())
-            : null;
-        if (!file) {
+    // A repeat require skips the file server calls of the lookup.
+    const realPaths = new Map();
+    const isFile = (p) => {
+        try {
+            return fs.statSync(p).isFile();
+        } catch {
+            return false;
+        }
+    };
+    const findReal = (name, file) => {
+        const found = file && [file, `${file}.js`, `${file}.json`].find(isFile);
+        if (!found) {
             const error = new Error(`Cannot find module '${name}'`);
             error.code = "MODULE_NOT_FOUND";
             throw error;
         }
         // The file server finds a file whose name has other capitals, so
         // only the real path names one file.
-        const real = fs.realpathSync(file);
+        return fs.realpathSync(found);
+    };
+    const requireFrom = (folder) => (name) => {
+        const found = modules[name.replace(/^node:/, "")];
+        if (found) return found;
+        const file = /^\.{0,2}\//.test(name) ? path.resolve(folder, name) : null;
+        if (!realPaths.has(file)) realPaths.set(file, findReal(name, file));
+        const real = realPaths.get(file);
         if (!loaded.has(real)) {
             const source = fs.readFileSync(real, "utf8");
             const module = { exports: {} };
