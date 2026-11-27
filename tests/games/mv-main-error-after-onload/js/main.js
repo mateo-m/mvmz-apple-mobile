@@ -1,0 +1,2 @@
+window.onload = () => requestAnimationFrame(() => {});
+missingFunction();

@@ -440,15 +440,19 @@
             post({ type: "log", text: `console.${level}: ${args.map(String).join(" ")}`.toWellFormed() });
         };
     }
-    // An error in the top level of main.js stops the start of the game.
-    // MV sets window.onload at the end of main.js. MZ adds its load
-    // listener at the end of main.run(), and after that its own error
+    // An error in the top level of main.js stops the start of the game
+    // when it comes before main.js sets window.onload, as MV does at its
+    // end. A plugin, such as DKTools, can set window.onload after that, so
+    // the check reads window.onload at the time of the error. MZ adds its
+    // load listener at the end of main.run(), and after that its own error
     // listener stops the start. The filename of the error is the script
     // that threw, which can be a script that main.js called.
     let mainError = null;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
-        if (script && new URL(script).pathname.endsWith("/js/main.js")) mainError = e.message;
+        if (script && new URL(script).pathname.endsWith("/js/main.js") && window.onload === null) {
+            mainError = e.message;
+        }
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
     // MV and MZ print their other boot errors into an error printer.
@@ -462,9 +466,7 @@
         if (frameShown) return observer.disconnect();
         reportBootError(document.querySelector("#errorPrinter, #ErrorPrinter")?.innerText.trim());
     }).observe(document, { childList: true, subtree: true, characterData: true });
-    window.addEventListener("load", () => setTimeout(() => {
-        if (window.onload === null) reportBootError(mainError);
-    }));
+    window.addEventListener("load", () => setTimeout(() => reportBootError(mainError)));
     window.addEventListener("unhandledrejection", (e) =>
         post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() }));
 
