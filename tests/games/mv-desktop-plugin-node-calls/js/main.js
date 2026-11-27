@@ -45,4 +45,41 @@ fs.readdir("/", { withFileTypes: true }, (error, entries) =>
         return describeEntries(entries);
     }),
 );
+const checkLater = async (name, run) => {
+    try {
+        console.log(`${name} ${await run()}`);
+    } catch (error) {
+        console.log(`${name} threw ${error.code}`);
+    }
+};
+(async () => {
+    const folder = "/save/notes/old";
+    const note = `${folder}/note.md`;
+    try {
+        await checkLater("promise make folders", async () => {
+            await fs.promises.mkdir(folder, { recursive: true });
+            return fs.statSync(folder).isDirectory();
+        });
+        await checkLater("promise read written file", async () => {
+            await fs.promises.writeFile(note, "hello");
+            return fs.promises.readFile(note, { encoding: "utf8" });
+        });
+        await checkLater("promise read folder entries", async () => {
+            const entries = await fs.promises.readdir(folder, { withFileTypes: true });
+            return entries.map((entry) => `${entry.name} file=${entry.isFile()}`).join(", ");
+        });
+        await checkLater("promise stat", async () => (await fs.promises.stat(note)).size);
+        await checkLater("promise access missing", () => fs.promises.access(`${folder}/missing.md`));
+        await checkLater("promise remove", async () => {
+            await fs.promises.unlink(note);
+            await fs.promises.rmdir(folder);
+            await fs.promises.rmdir("/save/notes");
+            await fs.promises.rmdir("/save");
+            return fs.existsSync("/save");
+        });
+        check("promise module", () => require("fs/promises") === fs.promises);
+    } finally {
+        if (fs.existsSync("/save")) fs.rmdirSync("/save");
+    }
+})();
 window.onload = () => requestAnimationFrame(() => {});

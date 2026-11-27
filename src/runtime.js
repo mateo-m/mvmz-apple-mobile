@@ -174,6 +174,11 @@
         };
     }
     fs.exists = (p, callback) => setTimeout(() => callback(fs.existsSync(p)));
+    fs.promises = { access: async (p) => void ok(send("HEAD", p), "access", p) };
+    // Node has no fs.promises.exists.
+    for (const name of Object.keys(fs).filter((key) => key.endsWith("Sync") && key !== "existsSync")) {
+        fs.promises[name.slice(0, -"Sync".length)] = async (...args) => fs[name](...args);
+    }
 
     // MARK: crypto
 
@@ -335,7 +340,7 @@
             return new URL(String(p).endsWith("/") && !href.endsWith("/") ? href + "/" : href);
         },
     };
-    const modules = { fs, path, os, url, crypto, "nw.gui": nwGui };
+    const modules = { fs, "fs/promises": fs.promises, path, os, url, crypto, "nw.gui": nwGui };
 
     // Plugins also load CommonJS files of the game folder.
     const loaded = new Map();
