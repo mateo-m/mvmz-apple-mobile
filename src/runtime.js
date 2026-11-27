@@ -145,7 +145,11 @@
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),
-        readdirSync: (p) => JSON.parse(ok(send("GET", p), "scandir", p).responseText),
+        readdirSync: (p, options) => {
+            const names = JSON.parse(ok(send("GET", p), "scandir", p).responseText);
+            if (!(options && options.withFileTypes)) return names;
+            return names.map((name) => Object.assign(stat(path.join(pathOf(p), name)), { name }));
+        },
         renameSync: (from, to) => void ok(send("MOVE", from, null, false, { Destination: urlFor(to) }), "rename", from),
     };
     // Some plugins use the callback forms. They run the same requests
