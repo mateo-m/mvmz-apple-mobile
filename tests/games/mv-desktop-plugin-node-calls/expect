@@ -8,6 +8,7 @@ log: console.log: real path /js/main.js
 log: console.log: copy to save folder true
 log: console.log: copy with a mode threw ENOTSUP
 log: console.log: read a folder threw EISDIR
-log: console.log: read folder entries index.html file=true folder=false, js file=false folder=true
-log: console.log: read folder entries later index.html file=true folder=false, js file=false folder=true
+log: console.log: read folder names true
+log: console.log: read folder entries index.html file=true folder=false link=false, js file=false folder=true link=false, js-link file=false folder=false link=true
+log: console.log: read folder entries later index.html file=true folder=false link=false, js file=false folder=true link=false, js-link file=false folder=false link=true
 frame
