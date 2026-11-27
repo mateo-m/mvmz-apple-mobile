@@ -68,14 +68,27 @@
 
     // MARK: fs
 
+    // Node's fs also takes a file URL. Here the URLs that pathToFileURL
+    // makes are on the core's own address, so only those are file URLs.
+    const pathOf = (p) => {
+        if (!(p instanceof URL)) return String(p);
+        if (p.protocol + "//" + p.host !== origin) {
+            const error = new TypeError(`The URL must be of scheme file: ${p.href}`);
+            error.code = "ERR_INVALID_URL_SCHEME";
+            throw error;
+        }
+        return decodeURIComponent(p.pathname);
+    };
+
     // "/" is the game folder.
     const urlFor = (p) =>
-        origin + path.resolve(String(p)).split("/").map(encodeURIComponent).join("/");
+        origin + path.resolve(pathOf(p)).split("/").map(encodeURIComponent).join("/");
 
-    const send = (method, p, body, binary) => {
+    const send = (method, p, body, binary, headers = {}) => {
         const xhr = new XMLHttpRequest();
         xhr.open(method, urlFor(p), false);
         if (binary) xhr.overrideMimeType("text/plain; charset=x-user-defined");
+        for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
         xhr.send(body);
         return xhr;
     };
@@ -110,16 +123,13 @@
         existsSync: (p) => send("HEAD", p).status === 200,
         statSync: stat,
         lstatSync: stat,
-        realpathSync: (p) =>
-            decodeURIComponent(ok(send("HEAD", p), "realpath", p).getResponseHeader("X-Mvmz-Real-Path")),
+        realpathSync: (p) => {
+            const xhr = ok(send("HEAD", p, null, false, { "X-Mvmz-Real-Path": "1" }), "realpath", p);
+            return decodeURIComponent(xhr.getResponseHeader("X-Mvmz-Real-Path"));
+        },
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
-            if (xhr.getResponseHeader("X-Mvmz-Kind") === "directory") {
-                const error = new Error(`EISDIR: illegal operation on a directory, read '${p}'`);
-                error.code = "EISDIR";
-                throw error;
-            }
             if (encoding) return xhr.responseText;
             const text = xhr.responseText;
             const bytes = new Uint8Array(text.length);
@@ -132,13 +142,7 @@
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),
         readdirSync: (p) => JSON.parse(ok(send("GET", p), "scandir", p).responseText),
-        renameSync: (from, to) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("MOVE", urlFor(from), false);
-            xhr.setRequestHeader("Destination", urlFor(to));
-            xhr.send();
-            ok(xhr, "rename", from);
-        },
+        renameSync: (from, to) => void ok(send("MOVE", from, null, false, { Destination: urlFor(to) }), "rename", from),
     };
     // Some plugins use the callback forms. They run the same requests
     // one turn later.
@@ -168,15 +172,17 @@
     const nwApp = { argv: [], manifest: {}, quit: exit, closeAllWindows: exit };
     const nwGui = { App: nwApp, Window: { get: () => nwWindow }, Menu: class { createMacBuiltin() {} } };
     // A desktop release of MV or MZ runs on Windows or macOS, and a plugin
-    // can stop the game on any other platform.
-    const os = { platform: () => "darwin", homedir: () => "/", tmpdir: () => "/", EOL: "\n" };
+    // can stop the game on any other platform. Plugins keep their own saves
+    // in the home folder, and the app keeps the saves of a game over an
+    // update or a restore only in its save folder.
+    const os = { platform: () => "darwin", homedir: () => "/save", tmpdir: () => "/", EOL: "\n" };
     // Plugins turn file paths into file URLs to load game files. Here the
     // core serves those files, so the URLs use the core's scheme.
     const url = {
-        URL,
-        URLSearchParams,
-        pathToFileURL: (p) => new URL(urlFor(p)),
-        fileURLToPath: (u) => decodeURIComponent(new URL(String(u)).pathname),
+        pathToFileURL: (p) => {
+            const href = urlFor(p);
+            return new URL(String(p).endsWith("/") && !href.endsWith("/") ? href + "/" : href);
+        },
     };
     const modules = { fs, path, os, url, "nw.gui": nwGui };
 
