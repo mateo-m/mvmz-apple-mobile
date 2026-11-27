@@ -42,6 +42,13 @@
             return normalize(out).replace(/(.)\/$/, "$1");
         },
         isAbsolute: (p) => p.startsWith("/"),
+        relative: (from, to) => {
+            const a = path.resolve(from).split("/").filter(Boolean);
+            const b = path.resolve(to).split("/").filter(Boolean);
+            let i = 0;
+            while (i < a.length && i < b.length && a[i] === b[i]) i++;
+            return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/");
+        },
         dirname: (p) => {
             const trimmed = p.replace(/\/+$/, "");
             const i = trimmed.lastIndexOf("/");
@@ -103,6 +110,11 @@
         existsSync: (p) => send("HEAD", p).status === 200,
         statSync: stat,
         lstatSync: stat,
+        // The game folder has no links.
+        realpathSync: (p) => {
+            stat(p);
+            return path.resolve(String(p));
+        },
         readFileSync: (p, options) => {
             const encoding = typeof options === "string" ? options : options && options.encoding;
             const xhr = ok(send("GET", p, null, !encoding), "open", p);
@@ -113,6 +125,7 @@
             return bytes;
         },
         writeFileSync: (p, data) => void ok(send("PUT", p, data), "open", p),
+        copyFileSync: (from, to) => fs.writeFileSync(to, fs.readFileSync(from)),
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
         rmdirSync: (p) => void ok(send("DELETE", p), "rmdir", p),
         mkdirSync: (p) => void ok(send("MKCOL", p), "mkdir", p),
@@ -152,8 +165,18 @@
     const nwWindow = new Proxy({}, { get: (target, key) => (key in target ? target[key] : noop) });
     const nwApp = { argv: [], manifest: {}, quit: exit, closeAllWindows: exit };
     const nwGui = { App: nwApp, Window: { get: () => nwWindow }, Menu: class { createMacBuiltin() {} } };
-    const os = { platform: () => "linux", homedir: () => "/", tmpdir: () => "/", EOL: "\n" };
-    const modules = { fs, path, os, "nw.gui": nwGui };
+    // A desktop release of MV or MZ runs on Windows or macOS, and a plugin
+    // can stop the game on any other platform.
+    const os = { platform: () => "darwin", homedir: () => "/", tmpdir: () => "/", EOL: "\n" };
+    // Plugins turn file paths into file URLs to load game files. Here the
+    // core serves those files, so the URLs use the core's scheme.
+    const url = {
+        URL,
+        URLSearchParams,
+        pathToFileURL: (p) => new URL(urlFor(p)),
+        fileURLToPath: (u) => decodeURIComponent(new URL(String(u)).pathname),
+    };
+    const modules = { fs, path, os, url, "nw.gui": nwGui };
 
     window.nw = nwGui;
     window.require = (name) => {
@@ -166,7 +189,7 @@
     // MZ's main.js stops with an error when this path starts with
     // /private/var, so it must stay relative to the game folder.
     window.process = {
-        platform: "linux",
+        platform: os.platform(),
         env: {},
         argv: [],
         versions: {},
