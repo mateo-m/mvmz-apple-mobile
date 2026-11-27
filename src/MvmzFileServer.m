@@ -71,6 +71,23 @@ static NSString *_Nullable realPath(NSString *path) {
     return path;
 }
 
+static NSString *entryKind(NSString *path) {
+    // The attributes of a symbolic link are of the link, not of its target.
+    NSString *type = [NSFileManager.defaultManager attributesOfItemAtPath:path error:nil].fileType;
+    if ([type isEqualToString:NSFileTypeDirectory]) return @"directory";
+    if ([type isEqualToString:NSFileTypeSymbolicLink]) return @"link";
+    if ([type isEqualToString:NSFileTypeRegular]) return @"file";
+    return @"other";
+}
+
+static NSArray<NSDictionary<NSString *, NSString *> *> *directoryEntries(NSString *path) {
+    NSMutableArray *entries = [NSMutableArray array];
+    for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:path error:nil]) {
+        [entries addObject:@{@"name" : name, @"kind" : entryKind([path stringByAppendingPathComponent:name])}];
+    }
+    return entries;
+}
+
 static NSString *mimeType(NSString *path) {
     NSString *ext = path.pathExtension.lowercaseString;
     if ([ext isEqualToString:@"js"]) return @"text/javascript";
@@ -172,14 +189,12 @@ static NSString *mimeType(NSString *path) {
         @((long long)([attributes.fileModificationDate timeIntervalSince1970] * 1000)).stringValue;
 
     if (directory) {
-        NSArray *names = [files contentsOfDirectoryAtPath:path error:nil] ?: @[];
-        NSData *json = [NSJSONSerialization dataWithJSONObject:names options:0 error:nil];
         headers[@"Content-Type"] = @"application/json";
         if ([method isEqualToString:@"HEAD"]) {
             headers[@"Content-Length"] = @"0";
-        } else {
-            *body = json;
+            return 200;
         }
+        *body = [NSJSONSerialization dataWithJSONObject:directoryEntries(path) options:0 error:nil];
         return 200;
     }
 

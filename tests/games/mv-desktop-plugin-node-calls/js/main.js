@@ -28,4 +28,21 @@ check("copy to save folder", () => {
 });
 check("copy with a mode", () => fs.copyFileSync("/index.html", "/save/copies/index.html", 1));
 check("read a folder", () => fs.readFileSync("/js"));
+const describeEntries = (entries) =>
+    entries
+        .filter((entry) => ["index.html", "js", "js-link"].includes(entry.name))
+        .map(
+            (entry) =>
+                `${entry.name} file=${entry.isFile()} folder=${entry.isDirectory()} link=${entry.isSymbolicLink()}`,
+        )
+        .sort()
+        .join(", ");
+check("read folder names", () => fs.readdirSync("/").includes("index.html"));
+check("read folder entries", () => describeEntries(fs.readdirSync("/", { withFileTypes: true })));
+fs.readdir("/", { withFileTypes: true }, (error, entries) =>
+    check("read folder entries later", () => {
+        if (error) throw error;
+        return describeEntries(entries);
+    }),
+);
 window.onload = () => requestAnimationFrame(() => {});
