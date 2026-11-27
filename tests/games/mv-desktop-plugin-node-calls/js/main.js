@@ -37,6 +37,15 @@ check("write stream", () => {
     fs.rmdirSync("/save");
     return written;
 });
+check("write stream bytes", () => {
+    const stream = fs.createWriteStream("save/bytes.bin");
+    stream.write(new Uint8Array([0, 255]));
+    stream.end(new Uint8Array([1, 2]));
+    const written = fs.readFileSync("/save/bytes.bin");
+    fs.unlinkSync("/save/bytes.bin");
+    fs.rmdirSync("/save");
+    return written.join(",");
+});
 check("read a folder", () => fs.readFileSync("/js"));
 const describeEntries = (entries) =>
     entries

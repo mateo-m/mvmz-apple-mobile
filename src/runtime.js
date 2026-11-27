@@ -143,10 +143,17 @@
             fs.writeFileSync(to, fs.readFileSync(from));
         },
         createWriteStream: (p) => {
-            let text = "";
+            const chunks = [];
+            const write = (chunk) =>
+                void chunks.push(typeof chunk === "string" ? new TextEncoder().encode(chunk) : chunk);
             return {
-                write: (chunk) => void (text += chunk),
-                end: (chunk = "") => fs.writeFileSync(p, text + chunk),
+                write,
+                end: (chunk = "") => {
+                    write(chunk);
+                    const bytes = new Uint8Array(chunks.reduce((size, part) => size + part.length, 0));
+                    chunks.reduce((offset, part) => (bytes.set(part, offset), offset + part.length), 0);
+                    fs.writeFileSync(p, bytes);
+                },
             };
         },
         unlinkSync: (p) => void ok(send("DELETE", p), "unlink", p),
