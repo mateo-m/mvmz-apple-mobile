@@ -450,14 +450,11 @@
     // before that. The filename of the error is the script that threw,
     // which can be a script that main.js called.
     let mainError = null;
-    let loading = false;
-    let loadThrew = false;
     window.addEventListener("error", (e) => {
         const script = document.currentScript?.src;
         if (script && new URL(script).pathname.endsWith("/js/main.js") && window.onload === null) {
             mainError = e.message;
         }
-        if (loading) loadThrew = true;
         post({ type: "log", text: `error: ${e.message} at ${e.filename}:${e.lineno}`.toWellFormed() });
     });
     // MV and MZ print their other boot errors into an error printer.
@@ -475,20 +472,26 @@
     // WebKit fires pageshow after the last load listener and its promise
     // callbacks, and before any timer.
     let startPromise = null;
+    let onloadThrew = false;
     window.addEventListener("load", () => {
-        loading = true;
         const onload = window.onload;
         if (!mainError || !onload) return;
         // An async onload, such as one that waits and then calls the
         // missing onload of main.js, fails with a rejection, not an error.
         window.onload = function (event) {
-            startPromise = onload.call(this, event);
+            try {
+                startPromise = onload.call(this, event);
+            } catch (error) {
+                onloadThrew = true;
+                throw error;
+            }
             return startPromise;
         };
     });
-    window.addEventListener("pageshow", () => {
-        loading = false;
-        if (!waiting.size && (window.onload === null || loadThrew)) reportBootError(mainError);
+    window.addEventListener("pageshow", (e) => {
+        // A script can send its own pageshow event before the load event.
+        if (!e.isTrusted) return;
+        if (!waiting.size && (window.onload === null || onloadThrew)) reportBootError(mainError);
     });
     window.addEventListener("unhandledrejection", (e) => {
         post({ type: "log", text: `unhandled rejection: ${e.reason}`.toWellFormed() });
