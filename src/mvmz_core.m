@@ -362,6 +362,8 @@ void mvmz_inject_key(int usage, int pressed) {
 // gives no point while an event runs. The last resume point, or the one
 // that the page loads, is then still the newest game state. The page can
 // also stop before its answer comes, so that point holds from the pause on.
+// A point from a pause does not show that the game ran after a restart:
+// during the boot scene, the page gives back the point that it loads.
 void mvmz_pause(void (*done)(void *), void *userdata) {
     gPaused = YES;
     if (!gResumePoint) {
@@ -372,7 +374,6 @@ void mvmz_pause(void (*done)(void *), void *userdata) {
               completionHandler:^(id result, NSError *error) {
                   if (webView == gWebView && !error && [result isKindOfClass:NSString.class]) {
                       gResumePoint = result;
-                      gReloaded = NO;
                   }
                   if (done) {
                       done(userdata);

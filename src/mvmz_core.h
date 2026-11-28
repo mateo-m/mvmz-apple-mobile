@@ -111,8 +111,9 @@ void mvmz_set_error_callback(void (*callback)(const char *message, void *userdat
 // memory of the device, the memory of the app, and the thermal state.
 //
 // The exit callback runs when the page stops before its first frame, or
-// stops again before the game made a new resume point, or does not load.
-// The saves of the player stay as they are.
+// does not load. It also runs when the page stops again during play before
+// the game made a new resume point as it runs. A point from a pause does
+// not count. The saves of the player stay as they are.
 void mvmz_set_restart_callback(void (*callback)(int atResumePoint, const char *stop, void *userdata),
                                void *userdata);
 

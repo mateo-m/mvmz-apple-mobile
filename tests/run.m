@@ -16,7 +16,9 @@
 // it exits.
 //
 // A game that logs "stop the web content process" gets its web content
-// process stopped, as iOS stops it when it needs memory.
+// process stopped, as iOS stops it when it needs memory. A game that logs
+// "pause the game" gets a pause and a resume, as the app gives it when it
+// goes to the background and back. The pause adds the line "paused".
 
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
@@ -36,11 +38,18 @@ static void stopWebContentProcess(void) {
     }
 }
 
+static void onPaused(void *userdata) {
+    [gLines addObject:@"paused"];
+    mvmz_resume();
+}
+
 static void onLog(const char *line, void *userdata) {
     NSString *text = @(line);
     [gLines addObject:[@"log: " stringByAppendingString:text]];
     if ([text isEqualToString:@"console.log: stop the web content process"]) {
         stopWebContentProcess();
+    } else if ([text isEqualToString:@"console.log: pause the game"]) {
+        mvmz_pause(onPaused, NULL);
     }
 }
 
