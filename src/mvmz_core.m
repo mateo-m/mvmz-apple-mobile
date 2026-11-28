@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #endif
 #import <WebKit/WebKit.h>
+#include <mach/mach.h>
 
 #include "mvmz_core.h"
 #import "MvmzFileServer.h"
@@ -28,6 +29,13 @@ static BOOL gPaused;
 static BOOL gPageStopped;
 static NSString *gLoadingResumePoint;
 
+typedef enum { PageLoading, PageReloading, PageRunning } PageState;
+static PageState gPageState;
+// The core loaded the page again after a stop, and the game made no new
+// resume point since then.
+static BOOL gReloaded;
+static NSString *gStopLine;
+
 static void (*gFrame)(void *);
 static void *gFrameData;
 static void (*gSize)(int, int, void *);
@@ -40,6 +48,8 @@ static void (*gLog)(const char *, void *);
 static void *gLogData;
 static void (*gError)(const char *, void *);
 static void *gErrorData;
+static void (*gRestart)(int, const char *, void *);
+static void *gRestartData;
 
 static void logLine(NSString *line) {
     if (gLog) {
@@ -81,13 +91,62 @@ static void setRuntime(WKUserContentController *controller, NSString *resumePoin
     [controller addUserScript:script];
 }
 
-// Each point gives one reload, so a page that stops again during its
-// load, with no pause, ends the game.
-static void reloadFromResumePoint(void) {
-    logLine(@"the game starts again from its resume point");
+static void restarted(BOOL atResumePoint) {
+    if (gRestart) {
+        gRestart(atResumePoint, gStopLine.UTF8String, gRestartData);
+    }
+}
+
+static NSString *thermalName(NSProcessInfoThermalState state) {
+    switch (state) {
+    case NSProcessInfoThermalStateNominal:
+        return @"nominal";
+    case NSProcessInfoThermalStateFair:
+        return @"fair";
+    case NSProcessInfoThermalStateSerious:
+        return @"serious";
+    case NSProcessInfoThermalStateCritical:
+        return @"critical";
+    }
+    return @"unknown";
+}
+
+// An app cannot read the memory of the web content process, so the line
+// gives the free memory of the device and the footprint of the app.
+static NSString *makeStopLine(void) {
+    const unsigned long long mb = 1024 * 1024;
+    NSString *freeMemory = @"unknown";
+    mach_port_t host = mach_host_self();
+    vm_size_t pageSize;
+    vm_statistics64_data_t vm;
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    if (host_page_size(host, &pageSize) == KERN_SUCCESS &&
+        host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm, &count) == KERN_SUCCESS) {
+        freeMemory = [NSString stringWithFormat:@"%llu MB", (unsigned long long)vm.free_count * pageSize / mb];
+    }
+    mach_port_deallocate(mach_task_self(), host);
+    NSString *footprint = @"unknown";
+    task_vm_info_data_t task;
+    count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&task, &count) == KERN_SUCCESS) {
+        footprint = [NSString stringWithFormat:@"%llu MB", task.phys_footprint / mb];
+    }
+    return [NSString stringWithFormat:@"the web content process stopped: %@ of %llu MB free, the app uses %@, "
+                                      @"thermal state %@",
+                                      freeMemory, NSProcessInfo.processInfo.physicalMemory / mb, footprint,
+                                      thermalName(NSProcessInfo.processInfo.thermalState)];
+}
+
+// A page that stops again before the game makes a new resume point ends
+// the game, so a stop that comes back each time cannot load the page
+// forever.
+static void reloadAfterStop(void) {
+    logLine(gResumePoint ? @"the game starts again from its resume point"
+                         : @"the game starts again at its title screen");
     setRuntime(gWebView.configuration.userContentController, gResumePoint);
-    gResumePoint = nil;
     gPageStopped = NO;
+    gReloaded = YES;
+    gPageState = PageReloading;
     [gWebView reload];
 }
 
@@ -106,24 +165,29 @@ __attribute__((visibility("hidden")))
     }
     NSString *type = body[@"type"];
     if ([type isEqualToString:@"frame"]) {
-        // The page posts a frame after each load and each resume. The game
-        // then runs past its resume point, so a stop from now on, or a
-        // reload by the game itself, must not go back to it. A frame while
-        // paused can come from a page that loads its point after the pause
-        // failed on it. That page is still at the point. A frame from a
-        // resumed page that the core reads after the next pause is past it.
+        // The page posts a frame after each load and each resume. A frame
+        // while paused comes from a page that loaded after the pause.
         if (gPaused) {
             runJS(@"__mvmz.pause()");
         }
-        if (!gPaused || !gLoadingResumePoint) {
-            gResumePoint = nil;
+        if (gPageState == PageReloading && !gLoadingResumePoint) {
+            restarted(NO);
         }
         if (gLoadingResumePoint) {
             setRuntime(gWebView.configuration.userContentController, nil);
         }
+        gPageState = PageRunning;
         if (gFrame) {
             gFrame(gFrameData);
         }
+    } else if ([type isEqualToString:@"resumePoint"]) {
+        NSString *point = body[@"point"];
+        gResumePoint = [point isKindOfClass:NSString.class] ? point : nil;
+        if (gResumePoint) {
+            gReloaded = NO;
+        }
+    } else if ([type isEqualToString:@"restarted"]) {
+        restarted([body[@"atResumePoint"] boolValue]);
     } else if ([type isEqualToString:@"fps"]) {
         gFps = [body[@"fps"] doubleValue];
     } else if ([type isEqualToString:@"details"]) {
@@ -161,7 +225,7 @@ __attribute__((visibility("hidden")))
     // second reload replaces (-999 or WebKit error 102), keeps the page
     // that was there.
     // A reload after the web content process stopped has no page to keep.
-    if (webView.backForwardList.currentItem && !gLoadingResumePoint) {
+    if (webView.backForwardList.currentItem && gPageState != PageReloading) {
         return;
     }
     logLine([NSString stringWithFormat:@"index.html did not load: %@", error]);
@@ -172,13 +236,29 @@ __attribute__((visibility("hidden")))
 // gone with it. iOS stops it to get memory back, also while the app is
 // in the background.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    logLine(@"the web content process stopped");
-    if (!gResumePoint) {
+    gStopLine = makeStopLine();
+    logLine(gStopLine);
+    if (gPageState == PageLoading) {
         exitGame(NO);
     } else if (gPaused) {
+        // Each reload after a stop in the background needs the player to
+        // come back to the game, so it cannot repeat by itself.
         gPageStopped = YES;
+    } else if (gPageState != PageRunning) {
+        exitGame(NO);
+    } else if (gReloaded) {
+        logLine(@"the game stopped again before it made a new resume point");
+        exitGame(NO);
     } else {
-        reloadFromResumePoint();
+        reloadAfterStop();
+    }
+}
+
+// A page that the game loads itself, for example to go back to its title
+// screen, does not go back to the resume point after a stop.
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
+    if (gPageState == PageRunning) {
+        gResumePoint = nil;
     }
 }
 
@@ -279,6 +359,9 @@ void mvmz_stop(void) {
     gPaused = NO;
     gPageStopped = NO;
     gLoadingResumePoint = nil;
+    gPageState = PageLoading;
+    gReloaded = NO;
+    gStopLine = nil;
 }
 
 // runtime.js turns the scancode into the keyCode the game reads.
@@ -286,10 +369,13 @@ void mvmz_inject_key(int usage, int pressed) {
     runJS([NSString stringWithFormat:@"__mvmz.key(%d,%d)", usage, pressed]);
 }
 
-// A pause fails on a page that is gone or that has not loaded yet. The
-// resume point of the last pause, or the one that the page loads, is then
-// still the newest game state. The page can also stop before its answer
-// comes, so that point holds from the pause on.
+// A pause fails on a page that is gone or that has not loaded yet, and it
+// gives no point while an event runs. The core then keeps the last resume
+// point, or the one that the page loads: the page clears the point when the
+// game saves after it. The page can also stop before its answer comes, so
+// that point holds from the pause on.
+// A point from a pause does not show that the game ran after a restart:
+// during the boot scene, the page gives back the point that it loads.
 void mvmz_pause(void (*done)(void *), void *userdata) {
     gPaused = YES;
     if (!gResumePoint) {
@@ -298,8 +384,8 @@ void mvmz_pause(void (*done)(void *), void *userdata) {
     WKWebView *webView = gWebView;
     [webView evaluateJavaScript:@"__mvmz.pause()"
               completionHandler:^(id result, NSError *error) {
-                  if (webView == gWebView && !error) {
-                      gResumePoint = [result isKindOfClass:NSString.class] ? result : nil;
+                  if (webView == gWebView && !error && [result isKindOfClass:NSString.class]) {
+                      gResumePoint = result;
                   }
                   if (done) {
                       done(userdata);
@@ -310,7 +396,7 @@ void mvmz_pause(void (*done)(void *), void *userdata) {
 void mvmz_resume(void) {
     gPaused = NO;
     if (gPageStopped) {
-        reloadFromResumePoint();
+        reloadAfterStop();
         return;
     }
     runJS(@"__mvmz.resume()");
@@ -353,6 +439,11 @@ void mvmz_set_log_callback(void (*callback)(const char *, void *), void *userdat
 void mvmz_set_error_callback(void (*callback)(const char *, void *), void *userdata) {
     gError = callback;
     gErrorData = userdata;
+}
+
+void mvmz_set_restart_callback(void (*callback)(int, const char *, void *), void *userdata) {
+    gRestart = callback;
+    gRestartData = userdata;
 }
 
 double mvmz_fps(void) {
