@@ -102,6 +102,8 @@ void mvmz_set_error_callback(void (*callback)(const char *message, void *userdat
 // point: the game state in memory, at each pause and while the game runs,
 // at most every 30 seconds and on each new map, when the game could save
 // (see mvmz_pause). The title screen and the game over screen clear it.
+// A save in an event also clears it, because the core cannot keep a point
+// there. So does a page that the game loads itself.
 //
 // After a stop, the core loads the page again, at the next mvmz_resume
 // when the game is paused. The game goes back to its newest resume point,
@@ -110,10 +112,12 @@ void mvmz_set_error_callback(void (*callback)(const char *message, void *userdat
 // at its resume point. stop is the log line of the stop, with the free
 // memory of the device, the memory of the app, and the thermal state.
 //
-// The exit callback runs when the page stops before its first frame, or
-// does not load. It also runs when the page stops again during play before
-// the game made a new resume point as it runs. A point from a pause does
-// not count. The saves of the player stay as they are.
+// The exit callback runs when the page stops before its first frame, also
+// while the game is paused, or does not load. It also runs when the page
+// stops again during play before the game made a new resume point as it
+// runs. A point from a pause does not count. A stop while the game is
+// paused after its first frame always loads the page again at the next
+// mvmz_resume. The saves of the player stay as they are.
 void mvmz_set_restart_callback(void (*callback)(int atResumePoint, const char *stop, void *userdata),
                                void *userdata);
 

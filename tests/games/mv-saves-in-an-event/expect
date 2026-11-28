@@ -1,0 +1,4 @@
+frame
+log: the web content process stopped: *
+log: the game starts again at its title screen
+restart atResumePoint=0 stop=the web content process stopped: *

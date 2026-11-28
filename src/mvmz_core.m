@@ -115,14 +115,14 @@ static NSString *thermalName(NSProcessInfoThermalState state) {
 // gives the free memory of the device and the footprint of the app.
 static NSString *makeStopLine(void) {
     const unsigned long long mb = 1024 * 1024;
-    NSString *free = @"unknown";
+    NSString *freeMemory = @"unknown";
     mach_port_t host = mach_host_self();
     vm_size_t pageSize;
     vm_statistics64_data_t vm;
     mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
     if (host_page_size(host, &pageSize) == KERN_SUCCESS &&
         host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm, &count) == KERN_SUCCESS) {
-        free = [NSString stringWithFormat:@"%llu MB", (unsigned long long)vm.free_count * pageSize / mb];
+        freeMemory = [NSString stringWithFormat:@"%llu MB", (unsigned long long)vm.free_count * pageSize / mb];
     }
     mach_port_deallocate(mach_task_self(), host);
     NSString *footprint = @"unknown";
@@ -133,7 +133,7 @@ static NSString *makeStopLine(void) {
     }
     return [NSString stringWithFormat:@"the web content process stopped: %@ of %llu MB free, the app uses %@, "
                                       @"thermal state %@",
-                                      free, NSProcessInfo.processInfo.physicalMemory / mb, footprint,
+                                      freeMemory, NSProcessInfo.processInfo.physicalMemory / mb, footprint,
                                       thermalName(NSProcessInfo.processInfo.thermalState)];
 }
 
@@ -166,8 +166,7 @@ __attribute__((visibility("hidden")))
     NSString *type = body[@"type"];
     if ([type isEqualToString:@"frame"]) {
         // The page posts a frame after each load and each resume. A frame
-        // while paused comes from a page that loaded after the pause. A
-        // reload by the game itself must not go back to the resume point.
+        // while paused comes from a page that loaded after the pause.
         if (gPaused) {
             runJS(@"__mvmz.pause()");
         }
@@ -239,7 +238,11 @@ __attribute__((visibility("hidden")))
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
     gStopLine = makeStopLine();
     logLine(gStopLine);
-    if (gPaused) {
+    if (gPageState == PageLoading) {
+        exitGame(NO);
+    } else if (gPaused) {
+        // Each reload after a stop in the background needs the player to
+        // come back to the game, so it cannot repeat by itself.
         gPageStopped = YES;
     } else if (gPageState != PageRunning) {
         exitGame(NO);
@@ -248,6 +251,14 @@ __attribute__((visibility("hidden")))
         exitGame(NO);
     } else {
         reloadAfterStop();
+    }
+}
+
+// A page that the game loads itself, for example to go back to its title
+// screen, does not go back to the resume point after a stop.
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
+    if (gPageState == PageRunning) {
+        gResumePoint = nil;
     }
 }
 
@@ -359,9 +370,10 @@ void mvmz_inject_key(int usage, int pressed) {
 }
 
 // A pause fails on a page that is gone or that has not loaded yet, and it
-// gives no point while an event runs. The last resume point, or the one
-// that the page loads, is then still the newest game state. The page can
-// also stop before its answer comes, so that point holds from the pause on.
+// gives no point while an event runs. The core then keeps the last resume
+// point, or the one that the page loads: the page clears the point when the
+// game saves after it. The page can also stop before its answer comes, so
+// that point holds from the pause on.
 // A point from a pause does not show that the game ran after a restart:
 // during the boot scene, the page gives back the point that it loads.
 void mvmz_pause(void (*done)(void *), void *userdata) {

@@ -18,7 +18,9 @@
 // A game that logs "stop the web content process" gets its web content
 // process stopped, as iOS stops it when it needs memory. A game that logs
 // "pause the game" gets a pause and a resume, as the app gives it when it
-// goes to the background and back. The pause adds the line "paused".
+// goes to the background and back. The pause adds the line "paused". A
+// game that logs "pause the game and stop the web content process" gets a
+// pause, then the stop, and then a resume.
 
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
@@ -28,6 +30,7 @@
 
 static NSMutableArray<NSString *> *gLines;
 static BOOL gExited;
+static BOOL gResumeAfterStop;
 static WKWebView *gWebView;
 
 // WebKit has no public call that stops the web content process.
@@ -50,6 +53,16 @@ static void onLog(const char *line, void *userdata) {
         stopWebContentProcess();
     } else if ([text isEqualToString:@"console.log: pause the game"]) {
         mvmz_pause(onPaused, NULL);
+    } else if ([text isEqualToString:@"console.log: pause the game and stop the web content process"]) {
+        gResumeAfterStop = YES;
+        mvmz_pause(NULL, NULL);
+        stopWebContentProcess();
+    } else if (gResumeAfterStop && [text hasPrefix:@"the web content process stopped"]) {
+        // The core logs this line before it handles the stop.
+        gResumeAfterStop = NO;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            mvmz_resume();
+        });
     }
 }
 
@@ -94,6 +107,7 @@ static NSArray<NSString *> *missingLines(NSArray<NSString *> *lines, NSArray<NSS
 static NSArray<NSString *> *runGame(NSString *gameDir, NSTimeInterval seconds, NSArray<NSString *> *expected) {
     gLines = [NSMutableArray array];
     gExited = NO;
+    gResumeAfterStop = NO;
     // WebKit runs the frames of the page only in a visible window, and
     // the app learns that the window is visible from its events.
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 816, 624)

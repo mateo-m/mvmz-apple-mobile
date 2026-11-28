@@ -636,6 +636,28 @@
         post({ type: "resumePoint", point });
     };
 
+    // A save in an event, such as an MZ autosave after a transfer, makes no
+    // resume point. A stop then goes to the title screen, because the last
+    // point is older than the save, and a later save from it would replace
+    // the newer save.
+    window.addEventListener("load", () => {
+        if (typeof DataManager === "undefined" || !DataManager.saveGame) return;
+        const saveGame = DataManager.saveGame;
+        DataManager.saveGame = function (...args) {
+            const result = saveGame.apply(this, args);
+            let point = null;
+            try {
+                point = makeResumePoint();
+            } catch (error) {
+                post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });
+            }
+            if (!point) resumePointTime = -Infinity;
+            resumePointKept = point !== null;
+            post({ type: "resumePoint", point });
+            return result;
+        };
+    });
+
     // The boot scene, and the plugins that change it, choose the next
     // scene in start(), so the map must replace that choice after it. The
     // plugins are in the page when the load event comes.
