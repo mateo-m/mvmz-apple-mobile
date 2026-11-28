@@ -598,7 +598,6 @@
     const resumePointInterval = 30000;
     let resumePointTime = -Infinity;
     let resumePointScene = null;
-    let resumePointKept = true;
     // The first map after a reload is at the point that the page loaded.
     // The core counts only a newer point as progress after a stop.
     let atLoadedPoint = false;
@@ -606,8 +605,8 @@
         if (typeof Scene_Map === "undefined") return;
         const scene = SceneManager._scene;
         if (scene instanceof Scene_Title || scene instanceof Scene_Gameover) {
-            if (resumePointKept) {
-                resumePointKept = false;
+            if (scene !== resumePointScene) {
+                resumePointScene = scene;
                 post({ type: "resumePoint", point: null });
             }
             return;
@@ -632,7 +631,6 @@
         if (!point) return;
         resumePointTime = time;
         resumePointScene = scene;
-        resumePointKept = true;
         post({ type: "resumePoint", point });
     };
 
@@ -652,7 +650,6 @@
                 post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });
             }
             if (!point) resumePointTime = -Infinity;
-            resumePointKept = point !== null;
             post({ type: "resumePoint", point });
             return result;
         };
