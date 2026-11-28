@@ -517,6 +517,7 @@
                 post({ type: "size", width: Graphics.width, height: Graphics.height });
             }
         }
+        keepResumePoint(time);
     };
 
     const schedule = () => {
@@ -590,6 +591,51 @@
         }
     };
 
+    // When the web content process stops during play, the core loads the
+    // page again from the newest of these points. Each point is a save in
+    // memory, so the game makes one at most every 30 seconds, and at the
+    // start of each map scene: after a transfer, a battle, a menu, or a load.
+    const resumePointInterval = 30000;
+    let resumePointTime = -Infinity;
+    let resumePointScene = null;
+    let resumePointKept = true;
+    // The first map after a reload is at the point that the page loaded.
+    // The core counts only a newer point as progress after a stop.
+    let atLoadedPoint = false;
+    const keepResumePoint = (time) => {
+        if (typeof Scene_Map === "undefined") return;
+        const scene = SceneManager._scene;
+        if (scene instanceof Scene_Title || scene instanceof Scene_Gameover) {
+            if (resumePointKept) {
+                resumePointKept = false;
+                post({ type: "resumePoint", point: null });
+            }
+            return;
+        }
+        const newMap = scene instanceof Scene_Map && scene !== resumePointScene;
+        if (newMap && atLoadedPoint) {
+            atLoadedPoint = false;
+            resumePointTime = time;
+            resumePointScene = scene;
+            return;
+        }
+        if (!newMap && time - resumePointTime < resumePointInterval) return;
+        let point;
+        try {
+            point = makeResumePoint();
+        } catch (error) {
+            post({ type: "log", text: `no resume point: ${error}`.toWellFormed() });
+            resumePointTime = time;
+            resumePointScene = scene;
+            return;
+        }
+        if (!point) return;
+        resumePointTime = time;
+        resumePointScene = scene;
+        resumePointKept = true;
+        post({ type: "resumePoint", point });
+    };
+
     // The boot scene, and the plugins that change it, choose the next
     // scene in start(), so the map must replace that choice after it. The
     // plugins are in the page when the load event comes.
@@ -620,10 +666,13 @@
                     }
                     $gameSystem.onAfterLoad();
                     SceneManager.goto(Scene_Map);
+                    atLoadedPoint = true;
                     post({ type: "log", text: "the game is back at its resume point" });
+                    post({ type: "restarted", atResumePoint: true });
                 } catch (error) {
                     post({ type: "log", text: `the resume point did not load: ${error}`.toWellFormed() });
                     DataManager.setupNewGame();
+                    post({ type: "restarted", atResumePoint: false });
                 }
             };
         });

@@ -1,0 +1,8 @@
+frame
+log: the web content process stopped: *
+log: the game starts again from its resume point
+log: console.log: variable 42
+log: the game is back at its resume point
+restart atResumePoint=1 stop=the web content process stopped: *
+log: the game stopped again before it made a new resume point
+exit clean=0

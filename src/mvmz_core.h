@@ -56,12 +56,8 @@ void mvmz_inject_key(int usage, int pressed);
 //
 // The pause also keeps the game state in memory when the game could save:
 // on its map or in a menu over it, with no event, message, or scene change
-// in progress. When iOS stops the web content process, for example in the
-// background, the core loads the page again from that state, at the next
-// mvmz_resume when the game is paused. With no such state, the exit
-// callback runs. If the state does not load, the game starts at its title
-// screen. If the page does not load, the exit callback runs. The saves of
-// the player stay as they are.
+// in progress. See mvmz_set_restart_callback for what the core does with
+// it.
 void mvmz_pause(void (*done)(void *userdata), void *userdata);
 
 // Starts the frames, the sound and the video again.
@@ -80,7 +76,7 @@ void mvmz_set_smooth(int smooth);
 // MARK: - What the game reports
 
 // Called on the first frame after mvmz_start, after each mvmz_resume,
-// and after a reload from a resume point (see mvmz_pause).
+// and after each reload (see mvmz_set_restart_callback).
 void mvmz_set_frame_callback(void (*callback)(void *userdata), void *userdata);
 
 // Called with the resolution of the game when it boots, and each time
@@ -90,8 +86,9 @@ void mvmz_set_size_callback(void (*callback)(int width, int height, void *userda
 
 // Called when the game stops by itself. clean is 1 when the game closed
 // itself. clean is 0 when index.html did not load, the game did not
-// start, or the web content process stopped with no state from a pause
-// to go back to (see mvmz_pause). In that case the game cannot go on.
+// start, or the web content process stopped and the core cannot load the
+// page again (see mvmz_set_restart_callback). In that case the game
+// cannot go on.
 void mvmz_set_exit_callback(void (*callback)(int clean, void *userdata), void *userdata);
 
 // Called with the error that stopped the game before its first frame,
@@ -99,6 +96,25 @@ void mvmz_set_exit_callback(void (*callback)(int clean, void *userdata), void *u
 // follows.
 void mvmz_set_error_callback(void (*callback)(const char *message, void *userdata),
                              void *userdata);
+
+// iOS stops the web content process when it needs memory, also in the
+// background, and the game state goes with it. The core keeps a resume
+// point: the game state in memory, at each pause and while the game runs,
+// at most every 30 seconds and on each new map, when the game could save
+// (see mvmz_pause). The title screen and the game over screen clear it.
+//
+// After a stop, the core loads the page again, at the next mvmz_resume
+// when the game is paused. The game goes back to its newest resume point,
+// or starts at its title screen when it has none or the point does not
+// load. Then this callback runs. atResumePoint is 1 when the game is back
+// at its resume point. stop is the log line of the stop, with the free
+// memory of the device, the memory of the app, and the thermal state.
+//
+// The exit callback runs when the page stops before its first frame, or
+// stops again before the game made a new resume point, or does not load.
+// The saves of the player stay as they are.
+void mvmz_set_restart_callback(void (*callback)(int atResumePoint, const char *stop, void *userdata),
+                               void *userdata);
 
 // Called with the text of the game's window.alert. The page waits until
 // the callback returns. window.confirm always gets yes.
